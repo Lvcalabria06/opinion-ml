@@ -1,0 +1,128 @@
+# =====================================================================
+# Premissas do simulador — OpiniOn / CC1 (Sprint 1)
+# ---------------------------------------------------------------------
+# Todos os valores abaixo são PREMISSAS DA EQUIPE (seção 4.3 do documento).
+# Os percentuais da pesquisa de monetização NÃO são usados como alvo.
+# As personas são provisórias: devem ser substituídas pelas personas
+# entregues pelo Design (artefato compartilhado, seção 3.5).
+# Mudou algo aqui? Rode de novo: python -m opinion.gerar_bootstrap
+# =====================================================================
+
+simulacao:
+  n_usuarios: 1200
+  semanas: 12                    # linha do tempo exigida pelo split temporal (seção 4.5)
+  data_inicio: "2026-07-06"      # segunda-feira; semanas 1–12 vão até 27/09/2026
+  semanas_historico_previo: 26   # avaliações feitas ANTES da simulação (perfil de gosto já existe)
+  n_obras: 600
+  semente: 42
+
+# ------------------------------------------------------------- personas
+# visitas_semana: quantas vezes por semana, em média, vai a cada tipo de local
+# convencao: probabilidade de ir em cada dia de convenção
+# abertura_social: Beta(a, b) — variável OCULTA (o modelo não vê)
+personas:
+  gamer_social:
+    peso: 0.22
+    midias: {jogo: 0.50, serie: 0.25, filme: 0.15, livro: 0.05, musica: 0.05}
+    avaliacoes_semana: 3.0
+    visitas_semana: {cinema: 0.6, livraria: 0.1, campus: 2.5}
+    convencao: 0.75
+    abertura_social: [5, 3]
+  cinefilo:
+    peso: 0.22
+    midias: {filme: 0.55, serie: 0.30, livro: 0.10, jogo: 0.05}
+    avaliacoes_semana: 2.5
+    visitas_semana: {cinema: 1.6, livraria: 0.3, campus: 2.0}
+    convencao: 0.20
+    abertura_social: [4, 4]
+  leitor_reservado:
+    peso: 0.18
+    midias: {livro: 0.60, filme: 0.20, serie: 0.15, musica: 0.05}
+    avaliacoes_semana: 1.5
+    visitas_semana: {cinema: 0.4, livraria: 1.3, campus: 2.5}
+    convencao: 0.05
+    abertura_social: [2, 5]
+  estudante_casual:
+    peso: 0.25
+    midias: {filme: 0.25, serie: 0.25, jogo: 0.20, musica: 0.20, livro: 0.10}
+    avaliacoes_semana: 0.8
+    visitas_semana: {cinema: 0.5, livraria: 0.2, campus: 4.0}
+    convencao: 0.20
+    abertura_social: [3, 4]
+  maratonista_series:
+    peso: 0.13
+    midias: {serie: 0.60, filme: 0.25, livro: 0.10, jogo: 0.05}
+    avaliacoes_semana: 2.0
+    visitas_semana: {cinema: 0.5, livraria: 0.2, campus: 1.5}
+    convencao: 0.25
+    abertura_social: [3, 3]
+
+# --------------------------------------------------------------- locais
+# instancias: quantos lugares desse tipo existem na cidade simulada
+# turnos: horários de início em que as pessoas se juntam (co-presença)
+# p_encontro: chance de dois desconhecidos no mesmo lugar/turno ficarem perto
+# duracao_mediana_s: duração típica de um encontro entre desconhecidos
+locais:
+  cinema:
+    instancias: 3
+    turnos: ["14:00", "17:00", "19:30", "22:00"]
+    p_encontro: 0.10
+    duracao_mediana_s: 300
+    dias: [0, 1, 2, 3, 4, 5, 6]
+  livraria:
+    instancias: 2
+    turnos: ["10:00", "13:00", "16:00", "19:00"]
+    p_encontro: 0.25
+    duracao_mediana_s: 180
+    dias: [0, 1, 2, 3, 4, 5, 6]
+  campus:
+    instancias: 4                # zonas: biblioteca, cantina, blocos de aula, área de convivência
+    turnos: ["08:00", "09:30", "11:00", "12:30", "14:00", "15:30", "17:00", "18:30"]
+    p_encontro: 0.03
+    duracao_mediana_s: 120
+    dias: [0, 1, 2, 3, 4]        # dias úteis
+  convencao_games:
+    instancias: 1
+    turnos: ["10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00", "17:00", "18:00", "19:00"]
+    turnos_por_visita: 3         # quem vai fica umas 3 horas
+    p_encontro: 0.015
+    duracao_mediana_s: 360
+    semanas_com_evento: [3, 7, 11]   # fins de semana com convenção
+
+amigos:
+  fracao_em_grupos: 0.5          # metade dos usuários tem um grupo de amigos (já se seguem)
+  tamanho_grupo: [2, 5]
+  p_ir_junto: 0.3                # quando um amigo sai, cada outro vai junto com essa chance
+  p_encontro: 0.9
+  mult_duracao: 6
+
+modos_descoberta:                # status da pulseira (seção 3.3)
+  inicial: {aberto: 0.55, discreto: 0.35, pausado: 0.10}
+  p_trocar_por_semana: 0.08      # pausado = pulseira não anuncia -> não gera encontros
+
+# ------------------------------------------------- processo do label
+# Probabilidade de o encontro CAUSAR uma conexão (logística + ruído):
+#   z = intercepto + compat*compat_latente_z + abertura*(abert_a*abert_b)
+#       + duracao*log(duracao/120) + contexto[local] + repeticao*min(encontros_anteriores, 5)
+#       + discreto*(algum em modo discreto) + N(0, ruido)
+# compat_latente_z (cosseno dos gostos, padronizado) e abertura são OCULTAS: o modelo só vê aproximações (notas, atividade...).
+conexao:
+  intercepto: -3.9
+  compat: 1.0                    # por desvio-padrão de compatibilidade latente
+  abertura: 2.2
+  duracao: 0.35
+  repeticao: 0.25
+  discreto: -0.3
+  ruido: 0.8
+  contexto: {convencao_games: 0.6, cinema: 0.3, livraria: 0.1, campus: -0.3}
+  atraso_medio_h: 14             # tempo até a 1ª interação (exponencial) — parte cai depois de 48 h
+  p_reciproca: 0.5
+
+interacoes_de_fundo:             # interações que NÃO vêm de encontro (feed do app)
+  entre_amigos_por_dia: 0.08     # cada par de amigos (seguem um ao outro), por direção
+  entre_seguidos_por_dia: 0.03   # quem segue alguém que não é amigo próximo
+  aleatorias_por_usuario_dia: 0.15
+
+toque_interesse:                 # dado secundário (não é label nem feature)
+  base: 0.03
+  ganho: 0.5

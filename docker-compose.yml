@@ -1,0 +1,92 @@
+# OpiniOn — CC1 (Sprint 1): pulseira virtual -> MQTT -> ingestão -> banco
+#
+#   cp .env.example .env      (uma vez; ajuste as senhas)
+#   docker compose up --build
+#
+#   mosquitto        broker MQTT ............................ localhost:1883
+#   postgres         banco de dados ......................... localhost:5432 (credenciais do .env)
+#   carga            gera o bootstrap (se ainda não existir) e carrega o histórico do app
+#   ingestao         recebe encontros/interesses/status via MQTT e grava no banco
+#   pulseira-replay  publica as 12 semanas do bootstrap via MQTT (roda uma vez, ~2 min)
+#   pulseira-ao-vivo continua gerando encontros novos em tempo real
+#   adminer          ver o banco no navegador ............... http://localhost:8080
+#                    (Sistema: PostgreSQL · Servidor: postgres · usuário/senha/base do .env)
+#
+# Depois que subir:
+#   docker compose exec ingestao python -m opinion.checkpoint1
+#   docker compose exec ingestao python -m opinion.verificar_replay
+#   docker compose exec ingestao python -m opinion.consultar
+
+x-app: &app
+  build: .
+  environment:
+    DATABASE_URL: postgresql://${POSTGRES_USER:-opinion}:${POSTGRES_PASSWORD:?crie o arquivo .env com cp .env.example .env}@postgres:5432/${POSTGRES_DB:-opinion}
+    MQTT_HOST: mosquitto
+    MQTT_PORT: "1883"
+    OPINION_SEGREDO_TOKEN: ${OPINION_SEGREDO_TOKEN:?crie o arquivo .env com cp .env.example .env}
+    PYTHONUNBUFFERED: "1"
+  volumes:
+    - ./data:/app/data
+
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2
+    ports: ["1883:1883"]
+    volumes:
+      - ./infra/mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+    healthcheck:
+      test: ["CMD", "mosquitto_sub", "-t", "$$SYS/broker/uptime", "-C", "1", "-W", "3"]
+      interval: 5s
+      retries: 10
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-opinion}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?crie o arquivo .env com cp .env.example .env}
+      POSTGRES_DB: ${POSTGRES_DB:-opinion}
+    ports: ["5432:5432"]
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-opinion}"]
+      interval: 3s
+      retries: 20
+
+  carga:
+    <<: *app
+    command: sh -c "python -m opinion.gerar_bootstrap --pular-se-existir && python -m opinion.carregar_historico_app"
+    depends_on:
+      postgres: {condition: service_healthy}
+    restart: "no"
+
+  ingestao:
+    <<: *app
+    command: python -m opinion.ingestao
+    depends_on:
+      carga: {condition: service_completed_successfully}
+      mosquitto: {condition: service_healthy}
+    restart: unless-stopped
+
+  pulseira-replay:
+    <<: *app
+    # espera a ingestão assinar os tópicos antes de publicar
+    command: sh -c "sleep 8 && python -m opinion.pulseira_virtual replay"
+    depends_on:
+      ingestao: {condition: service_started}
+    restart: "no"
+
+  pulseira-ao-vivo:
+    <<: *app
+    command: python -m opinion.pulseira_virtual ao-vivo --por-minuto ${ENCONTROS_POR_MINUTO:-20}
+    depends_on:
+      pulseira-replay: {condition: service_completed_successfully}
+    restart: unless-stopped
+
+  adminer:
+    image: adminer:4
+    ports: ["8080:8080"]
+    depends_on: [postgres]
+
+volumes:
+  pg-data:

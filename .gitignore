@@ -1,0 +1,22 @@
+# segredos e configuração local
+.env
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+.ipynb_checkpoints/
+
+# gerados pelos comandos (não versionar)
+data/opinion.db*
+data/staging/
+data/processed/
+data/validacao/
+airflow/logs/
+airflow_home/
+
+# sistema
+.DS_Store
+Thumbs.db
