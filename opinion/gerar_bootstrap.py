@@ -252,9 +252,12 @@ class Simulador:
                     amigos = self.sao_amigos(a, b)
                     if rng.random() >= (A["p_encontro"] if amigos else cl["p_encontro"]):
                         continue
+                    inicio = base_t + timedelta(seconds=float(rng.uniform(0, 80 * 60)))
+                    # o modo pode ter mudado entre o início do turno e o encontro: pulseira pausada não registra
+                    if "pausado" in (self.modo_em(a, inicio), self.modo_em(b, inicio)):
+                        continue
                     vistos_hoje.add(chave)
                     seq += 1
-                    inicio = base_t + timedelta(seconds=float(rng.uniform(0, 80 * 60)))
                     dur, rssi = atributos_encontro(rng, cl, amigos, A)
                     fim = inicio + timedelta(seconds=dur)
                     anteriores = n_anteriores[(a, b)]

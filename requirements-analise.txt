@@ -1,0 +1,6 @@
+# para o notebook de EDA, a validação da simulação e os testes
+-r requirements.txt
+matplotlib>=3.8
+scikit-learn>=1.4
+jupyter
+pytest
