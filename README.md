@@ -122,7 +122,7 @@ Sobe o broker, o PostgreSQL, a ingestão e a pulseira (replay de cerca de 2 min,
 | Serviço | Endereço |
 |---|---|
 | Airflow (sem login, só desenvolvimento) | http://localhost:8080 → DAG `opinion_pipeline` → **Trigger** |
-| Adminer (banco) | http://localhost:8081 (PostgreSQL · servidor `postgres` · `opinion`/`opinion`) |
+| Adminer (banco) | http://localhost:8081 (PostgreSQL · servidor `postgres` · usuário, senha e base do seu `.env`) |
 
 ```bash
 docker compose exec ingestao python -m opinion.checkpoint1         # Checkpoint 1
@@ -156,6 +156,101 @@ python -m opinion.validacao_simulacao            # regera docs/validacao_simulac
 ```
 
 Sem broker nem banco, o pipeline também lê direto dos arquivos: `python -m opinion.pipeline.executar --fonte arquivos`.
+
+---
+
+## Como testar (e o que esperar)
+
+Siga a **Opção B** acima, nesta ordem. Cada teste prova uma parte dos requisitos.
+
+| # | Comando | Prova | Requisito |
+|---|---|---|---|
+| 1 | abrir `data/bootstrap/relatorio_simulacao.md` | o dataset de 12 semanas existe e é plausível | CC1 |
+| 2 | `python -m opinion.pulseira_virtual replay` | a pulseira publica via MQTT e a ingestão grava | CC1 |
+| 3 | `python -m opinion.verificar_replay` | nenhuma mensagem perdida; IDs anônimos resolvidos certo | CC1 |
+| 4 | `python -m opinion.checkpoint1` | **Checkpoint 1**: encontro → broker → banco → consulta | CC1 |
+| 5 | `python -m opinion.pulseira_virtual ao-vivo --duracao-min 1 --duplicar 0.05 --invalidas 0.05` e depois `python -m opinion.consultar` | a ingestão ignora repetidas e rejeita defeituosas, com o motivo | CC1 |
+| 6 | `python -m opinion.pipeline.executar` (ou a DAG no Airflow) | o pipeline gera o dataset do modelo | CC2 |
+| 7 | `python -m pytest tests -q` | sem informação do futuro; label e janela de 48 h corretos | CC2 |
+| 8 | abrir `notebooks/eda_encontros.html` | EDA e preparação dos dados com justificativas | CC2 |
+| 9 | `python -m opinion.validacao_simulacao` | premissas, sanidade e sensibilidade | CC2 |
+
+### 1. Dataset simulado
+Em `data/bootstrap/relatorio_simulacao.md`, confira: 1.200 usuários, cerca de 54,6 mil encontros e **cerca de 14% com `conectou = 1`**, além de picos de encontros nas semanas 3, 7 e 11 (convenção).
+
+### 2. Replay pela pulseira virtual (~2 min)
+```
+[pulseira] Fim do replay: {'encontro': 54586, 'interesse': 6658, 'status': 2396}
+```
+No terminal da ingestão aparece o progresso a cada 5 mil mensagens, com `'rejeitadas': 0`.
+
+### 3. Nada se perdeu
+```
+Arquivo do bootstrap  x  banco
+  encontros    54,586   54,586   OK
+  interesses    6,658    6,658   OK
+  status        2,396    2,396   OK
+
+IDs rotativos traduzidos corretamente: 54,586 de 54,586 encontros
+RESULTADO: tudo certo ✔
+```
+Se aparecer `DIFERENTE`, a ingestão ainda está processando: espere alguns segundos e rode de novo.
+
+### 4. Checkpoint 1
+```
+2) Broker confirmou o recebimento (PUBACK, QoS 1): sim
+4) Encontrado com a consulta: SELECT * FROM encontros WHERE encontro_id = 'e-checkpoint-...'
+   usuario_a    usr-00001
+   ...
+CHECKPOINT 1 OK ✔
+```
+A mensagem sai com um ID anônimo (`u-...`) e chega ao banco já traduzida para o usuário real (`usr-00001`).
+
+### 5. Robustez
+No terminal da ingestão aparecem avisos `Rejeitada (...)`, o que é esperado. No `consultar`, as mensagens repetidas aparecem como `duplicada` e as defeituosas como rejeitadas, cada uma com o motivo.
+
+### 6. Pipeline (CC2)
+```
+[ingestao       ]   ...  encontros_de 2026-07-06 ... encontros_ate 2026-09-27 ...
+[compatibilidade]   ...  {'encontros': 54637, ...}
+[features       ]   ...
+[label          ]   ...  {'rotulados': 54586, 'pendentes': 51, 'taxa_conexao': 0.1364, ...}
+[preparacao     ]   ...  {'dataset_modelo': 54054, 'encontros_purgados_fronteira': 532, 'concordancia_label_referencia': 1.0}
+
+Dataset do modelo: {"teste": {"encontros": 10501, ...}, "treino": {"encontros": 36930, ...}, "validacao": {"encontros": 6623, ...}}
+```
+Os números de encontros e pendentes variam um pouco conforme quantos encontros "ao vivo" você gerou no teste 5. Esses encontros ficam **pendentes** porque ainda não se passaram 48 h. `concordancia_label_referencia: 1.0` quer dizer que o label bate 100% com o gabarito da simulação.
+
+**No Airflow:** com `airflow dags test opinion_pipeline`, ou o botão Trigger na interface, as 6 tasks terminam em `success`, e o log da task `resumo` mostra:
+```
+Dataset do modelo: 54,054 encontros | taxa de conexão 13.7%
+  treino      36,930 encontros  13.5% conectou  26,254 pares
+  ...
+```
+
+### 7. Testes automatizados (~35 s)
+```
+4 passed
+```
+O teste principal recalcula as features de 30 encontros **apagando tudo o que aconteceu depois do início de cada um**. Se algum valor mudar, alguma feature estaria olhando para o futuro, e o teste falha.
+
+### 8. Notebook
+Abra `notebooks/eda_encontros.html` no navegador; não precisa instalar nada. Para reexecutar, rode o teste 6 antes e depois `jupyter notebook notebooks/eda_encontros.ipynb` → *Run All*.
+
+### 9. Validação da simulação (~1 min)
+No final aparecem 16 checagens `OK`, 1 `ATENÇÃO` (RSSI) e a lista de conclusões que se mantêm ou não nos três cenários. O documento `docs/validacao_simulacao.md` é regerado.
+
+### Se algo der errado
+
+| Mensagem | Causa |
+|---|---|
+| `OPINION_SEGREDO_TOKEN não definida` | faltou `cp .env.example .env` |
+| `Broker indisponível` | o broker MQTT (terminal 1) não está rodando |
+| `Tabela usuarios vazia` | faltou `python -m opinion.carregar_historico_app` |
+| Checkpoint: `o serviço de ingestão está rodando?` | o terminal da ingestão foi fechado |
+| Pipeline: `nenhum encontro no banco` | rode o replay (teste 2) antes, ou use `--fonte arquivos` |
+
+Para recomeçar do zero, pare a ingestão, apague `data/opinion.db` e repita a partir de `carregar_historico_app`.
 
 ---
 
