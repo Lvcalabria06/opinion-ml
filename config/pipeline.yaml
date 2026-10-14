@@ -1,0 +1,37 @@
+# =====================================================================
+# Configuração do pipeline de dados (CC2) — seções 4.4 e 4.5 do documento
+# =====================================================================
+
+label:
+  janela_horas: 48                 # conectou = 1 se houve interação em até 48 h após o fim
+  tipos_interacao:                 # o que conta como "interação" entre os dois
+    - seguir
+    - abrir_perfil
+    - curtir_review
+    - comentar_review
+    - salvar_obra
+
+# Split temporal (seção 4.5). Datas de INÍCIO do encontro, intervalos [inicio, fim).
+split:
+  treino:    ["2026-07-06", "2026-08-31"]   # semanas 1–8
+  validacao: ["2026-08-31", "2026-09-14"]   # semanas 9–10
+  teste:     ["2026-09-14", "2026-09-28"]   # semanas 11–12
+  # Encontros do treino cuja janela de 48 h do label invade a validação são removidos
+  # do treino ("purga"): no fim da semana 8 esses rótulos ainda não seriam conhecidos.
+  purgar_fronteira: true
+
+features:
+  janela_atividade_dias: 28        # "nível de atividade" = avaliações nos últimos 28 dias
+  nota_favorita: 4                 # nota >= 4 conta como obra favorita
+
+# Pontuação de compatibilidade usada pela REGRA SIMPLES de referência (seção 4.5):
+# "emitir sinal quando a compatibilidade passa de um limite".
+compat_score:
+  peso_generos: 0.60               # similaridade de gêneros (levada para 0–1)
+  peso_notas: 0.25                 # concordância das notas nas mesmas obras (0,5 se não há obra em comum)
+  peso_favoritas: 0.15             # favoritas em comum (satura em 3)
+
+qualidade:                          # a DAG falha se algo sair destas faixas
+  taxa_conexao_min: 0.02
+  taxa_conexao_max: 0.40
+  min_encontros_por_split: 500

@@ -1,0 +1,35 @@
+# =====================================================================
+# Cenários da análise de sensibilidade (seção 4.3, item 3)
+# ---------------------------------------------------------------------
+# Cada cenário parte de config/simulacao.yaml (o cenário "base") e muda só
+# o que está listado. A pergunta é: as conclusões (o modelo supera a regra?
+# a ordem dos modelos se mantém? quais contextos convertem mais?) continuam
+# valendo se as premissas estiverem erradas para cima ou para baixo?
+#
+#   python -m opinion.validacao_simulacao
+# =====================================================================
+
+pessimista:
+  descricao: "Menos conexões, mais ruído, gosto e contexto pesam menos"
+  conexao:
+    intercepto: -4.5        # base -3.9  -> menos encontros viram conexão
+    ruido: 1.2              # base 0.8   -> resultado mais imprevisível
+    compat: 0.6             # base 1.0   -> compatibilidade importa menos
+    abertura: 1.5           # base 2.2
+    contexto_mult: 0.5      # efeitos de local pela metade
+  interacoes_de_fundo:
+    entre_amigos_por_dia: 0.12   # base 0.08 -> mais "falsos positivos" de amigos
+
+base:
+  descricao: "Premissas atuais (config/simulacao.yaml)"
+
+otimista:
+  descricao: "Mais conexões, menos ruído, gosto e contexto pesam mais"
+  conexao:
+    intercepto: -3.3
+    ruido: 0.5
+    compat: 1.4
+    abertura: 2.8
+    contexto_mult: 1.5
+  interacoes_de_fundo:
+    entre_amigos_por_dia: 0.05

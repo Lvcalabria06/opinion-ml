@@ -55,3 +55,36 @@ Variáveis ocultas, só para validar a simulação (Sprint 2) e nunca para trein
 - **Sem informação do futuro:** compatibilidade, encontros anteriores e "já se seguem" devem ser
   calculados só com dados de **antes do início** do encontro. As tabelas trazem as datas para isso.
 - **Agrupamento por par:** o mesmo par pode se encontrar várias vezes, por isso o k-fold deve ser agrupado por par.
+
+---
+
+## `data/processed/` — saída do pipeline (CC2)
+
+Gerada pela DAG `opinion_pipeline` (ou `python -m opinion.pipeline.executar`). É a entrada do CC3.
+
+`dataset_modelo.parquet`: uma linha por encontro rotulado e dentro do período do split.
+
+| Coluna | Descrição |
+|---|---|
+| encontro_id, par_id | identificação; `par_id` = os dois usuários em ordem alfabética (grupo do k-fold) |
+| usuario_a, usuario_b, inicio, fim, semana | contexto do encontro (não usar como feature) |
+| split | `treino` (semanas 1–8), `validacao` (9–10), `teste` (11–12) |
+| local_original | local em texto (para análise; a versão codificada está nas features) |
+| **features** (33) | listadas em `metadados.json → colunas_features`, agrupadas em `grupos_features` |
+| conectou | label: 1 se houve interação entre os dois em até 48 h após o fim |
+
+Features, todas calculadas com dados de **antes do início** do encontro:
+
+| Grupo | Features |
+|---|---|
+| Encontro | log_duracao, rssi_medio, n_encontros_anteriores_par, horas_desde_ultimo_encontro_par, primeiro_encontro_par |
+| Contexto | local_* (one-hot), periodo_* (one-hot), dia_semana, hora, fim_de_semana, algum_modo_discreto |
+| Compatibilidade | sim_generos, generos_top3_comum, n_obras_comuns, sim_notas, tem_obras_comuns, favoritas_comuns, compat_score |
+| Perfil | atividade_min/max (avaliações em 28 dias), historico_min/max, conexoes_min/max |
+| Relação | algum_segue, seguem_mutuamente, interacoes_anteriores_par, interagiram_antes |
+
+`_min`/`_max`: como "usuário A" e "usuário B" é uma ordem arbitrária, guardamos o menor e o maior valor dos dois.
+`compat_score` é a pontuação usada pela regra simples de referência (pesos em `config/pipeline.yaml`).
+
+`features_encontros.parquet`: os mesmos dados para **todos** os encontros, inclusive os que ainda aguardam
+as 48 h (`label_disponivel = 0`) e os removidos na fronteira (`split = purgado`).
