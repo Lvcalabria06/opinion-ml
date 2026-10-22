@@ -1,4 +1,4 @@
-# OpiniOn — CC1 (Sprint 1): pulseira virtual -> MQTT -> ingestão -> banco
+# OpiniOn — CC1 + CC2: pulseira virtual -> MQTT -> ingestão -> banco -> Airflow -> dataset do modelo
 #
 #   cp .env.example .env      (uma vez; ajuste as senhas)
 #   docker compose up --build
@@ -9,13 +9,15 @@
 #   ingestao         recebe encontros/interesses/status via MQTT e grava no banco
 #   pulseira-replay  publica as 12 semanas do bootstrap via MQTT (roda uma vez, ~2 min)
 #   pulseira-ao-vivo continua gerando encontros novos em tempo real
-#   adminer          ver o banco no navegador ............... http://localhost:8080
+#   airflow          pipeline de dados (CC2) ................ http://localhost:8080 (sem login em desenvolvimento)
+#   adminer          ver o banco no navegador ............... http://localhost:8081
 #                    (Sistema: PostgreSQL · Servidor: postgres · usuário/senha/base do .env)
 #
 # Depois que subir:
 #   docker compose exec ingestao python -m opinion.checkpoint1
 #   docker compose exec ingestao python -m opinion.verificar_replay
 #   docker compose exec ingestao python -m opinion.consultar
+#   docker compose exec airflow airflow dags test opinion_pipeline   (ou botão Trigger na interface)
 
 x-app: &app
   build: .
@@ -83,9 +85,36 @@ services:
       pulseira-replay: {condition: service_completed_successfully}
     restart: unless-stopped
 
+  airflow:
+    build:
+      context: .
+      dockerfile: airflow/Dockerfile
+    command: airflow standalone
+    # Linux: ajuste AIRFLOW_UID no .env (rode: id -u) para o Airflow poder escrever em ./data
+    user: "${AIRFLOW_UID:-50000}:0"
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-opinion}:${POSTGRES_PASSWORD:?crie o arquivo .env com cp .env.example .env}@postgres:5432/${POSTGRES_DB:-opinion}
+      OPINION_HOME: /opt/opinion
+      OPINION_DATA_DIR: /opt/opinion/data
+      OPINION_FONTE: banco
+      OPINION_SEGREDO_TOKEN: ${OPINION_SEGREDO_TOKEN:?crie o arquivo .env com cp .env.example .env}
+      PYTHONPATH: /opt/opinion
+      AIRFLOW__CORE__DAGS_FOLDER: /opt/opinion/airflow/dags
+      AIRFLOW__CORE__LOAD_EXAMPLES: "False"
+      AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_ALL_ADMINS: "True"   # sem login — só para desenvolvimento
+      AIRFLOW__API__PORT: "8080"
+    ports: ["8080:8080"]
+    volumes:
+      - ./opinion:/opt/opinion/opinion:ro
+      - ./config:/opt/opinion/config:ro
+      - ./airflow/dags:/opt/opinion/airflow/dags:ro
+      - ./data:/opt/opinion/data
+    depends_on:
+      pulseira-replay: {condition: service_completed_successfully}
+
   adminer:
     image: adminer:4
-    ports: ["8080:8080"]
+    ports: ["8081:8080"]
     depends_on: [postgres]
 
 volumes:
