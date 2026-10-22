@@ -12,9 +12,13 @@
 |---|---|---|---|
 | 1 | CC1 — dados simulados, pulseira virtual, MQTT, ingestão, Checkpoint 1 | ✅ feito | branch `main` |
 | 2 | CC2 — pipeline no Airflow, EDA, validação da simulação | 🟡 em revisão | [PR #1](https://github.com/Lvcalabria06/opinion-ml/pull/1) (branch `sprint-2-cc2`) |
+| — | Documentação de contexto, status e `AGENTS.md` | 🟡 em revisão | PR da branch `docs/contexto-agentes` para `sprint-2-cc2` |
 | — | Troca do dataset inventado por **datasets públicos reais** | 🔴 a fazer (prioridade) | ver [Frente A](#frente-a--datasets-públicos-reais-prioridade) |
 | 3 | CC3 — baseline explicável no MLflow + Checkpoint 2 | 🔴 a fazer | ver [Frente B](#frente-b--cc3-baseline-explicável-no-mlflow) |
 | — | Testar `docker compose up` de ponta a ponta | 🔴 a fazer | ver [Pendências](#pendências-de-infraestrutura) |
+
+Fluxo de trabalho: branches e PRs direto no repositório do Lucas (a equipe é colaboradora, sem fork).
+Enquanto o PR #1 não entrar na `main`, PRs que dependem da Sprint 2 apontam para `sprint-2-cc2`.
 
 Quem começa agora: leia [`contexto.md`](contexto.md) (10 min), depois este arquivo, depois o
 [README](../README.md) para rodar.
