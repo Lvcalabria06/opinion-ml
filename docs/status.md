@@ -14,7 +14,7 @@
 | 2 | CC2 — pipeline no Airflow, EDA, validação da simulação | 🟡 em revisão | [PR #1](https://github.com/Lvcalabria06/opinion-ml/pull/1) (branch `sprint-2-cc2`) |
 | — | Documentação de contexto, status e `AGENTS.md` | 🟡 em revisão | [PR #3](https://github.com/Lvcalabria06/opinion-ml/pull/3) (branch `docs/contexto-agentes` → `sprint-2-cc2`) |
 | — | Troca do dataset inventado por **datasets públicos reais** | ✅ feito | Amazon Reviews 2023, [`fontes_dados.md`](fontes_dados.md) · `data/reais/amazon2023/` |
-| 3 | CC3 — baseline explicável no MLflow + Checkpoint 2 | ✅ feito | `opinion/modelo/` · `python -m opinion.checkpoint2` |
+| 3 | CC3 — baseline explicável no MLflow + Checkpoint 2 | 🟡 em revisão | [PR #4](https://github.com/Lvcalabria06/opinion-ml/pull/4) (`sprint-3-cc3` → `sprint-2-cc2`) |
 | — | Testar `docker compose up` de ponta a ponta | 🔴 a fazer | ver [Pendências](#pendências-de-infraestrutura) |
 
 Fluxo de trabalho: branches e PRs direto no repositório do Lucas (a equipe é colaboradora, sem fork).
