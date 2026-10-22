@@ -2,5 +2,6 @@
 -r requirements.txt
 matplotlib>=3.8
 scikit-learn>=1.4
+mlflow>=3.5
 jupyter
 pytest

@@ -9,26 +9,27 @@ Este repositório acumula as entregas de CC sprint a sprint.
 |---|---|---|---|
 | 1 | **CC1** | Pulseira virtual publicando via MQTT, serviço de ingestão, banco, dataset simulado de 12 semanas, Checkpoint 1 | `opinion/` · `docs/contrato_mqtt.md` |
 | 2 | **CC2** | Pipeline no Airflow (ingestão, compatibilidade, features, label, preparação), notebook de EDA, validação da simulação, material da sessão com o Design | `opinion/pipeline/` · `airflow/dags/` · `notebooks/` · `docs/validacao_simulacao.md` |
+| 3 | **CC3** | Usuários/obras/avaliações da Amazon Reviews 2023; baseline (Regressão Logística) no MLflow; Checkpoint 2 | `opinion/fontes/` · `opinion/modelo/` · `docs/fontes_dados.md` |
 
-Tudo usa **dados sintéticos** (seção 4.3). Qualquer métrica mede a simulação, não usuários reais.
+Usuários, obras e avaliações são **reais** (Amazon Reviews 2023). Encontros da pulseira e o label
+ainda são simulados. Qualquer métrica mede essa mistura, não usuários reais da pulseira.
+
+**Chegando agora?** Leia [`docs/contexto.md`](docs/contexto.md) (o projeto em 10 minutos) e
+[`docs/status.md`](docs/status.md) (o que está feito e o que falta). Agentes de IA: [`AGENTS.md`](AGENTS.md).
 
 ---
 
 ## Visão geral
 
 ```
- SPRINT 1 (CC1)                                                SPRINT 2 (CC2)
- ─────────────────────────────────────────────────────────    ───────────────────────────────────────────────────
- gerar_bootstrap ─► data/bootstrap/ ─► carregar_historico_app ─┐
-                         │                                     ▼
-                         └─► pulseira_virtual ─► MQTT ─► ingestao ─► BANCO ─► Airflow: opinion_pipeline
-                                                                               ingestao ─┬─ compatibilidade ─┐
-                                                                                         ├─ features ────────┼─ preparacao ─ resumo
-                                                                                         └─ label ───────────┘        │
-                                                                                                                      ▼
-                                                                         data/processed/dataset_modelo.parquet  ◄── CC3 (baseline)
-                                                                                         │
-                                                                    notebooks/eda_encontros.ipynb · validacao_simulacao
+ Amazon Reviews 2023 (real)          SPRINT 1 (CC1)                         SPRINT 2 (CC2)              SPRINT 3 (CC3)
+ fontes.amazon2023 ─► data/reais/ ─► gerar_bootstrap ─► pulseira_virtual ─► MQTT ─► ingestao ─► BANCO
+                                          │                                      Airflow: opinion_pipeline
+                                          └─► carregar_historico_app              … ─► dataset_modelo.parquet
+                                                                                              │
+                                                                                              ▼
+                                                                                    opinion.modelo.treinar ─► MLflow
+                                                                                    Checkpoint 2
 ```
 
 ---
@@ -106,6 +107,31 @@ Os achados para a sessão estão nas seções 3 a 8 e 10 do notebook (e numa apr
 - as personas do simulador;
 - o custo de um sinal errado.
 
+## Sprint 3 — CC3: dados reais e baseline no MLflow
+
+### Dados reais (`opinion/fontes/amazon2023.py`)
+
+Usuários, obras e avaliações vêm da [Amazon Reviews 2023](https://amazon-reviews-2023.github.io/)
+(McAuley Lab, UCSD): os mesmos usuários reais avaliando livro, filme/série, jogo e música.
+Fonte, filtro e o que continua simulado: [`docs/fontes_dados.md`](docs/fontes_dados.md).
+
+```bash
+python -m opinion.fontes.amazon2023 tudo     # uma vez (baixa os brutos para data/externo/, fora do Git)
+python -m opinion.gerar_bootstrap            # usa data/reais/amazon2023/ (já versionado)
+```
+
+### Baseline (`opinion/modelo/treinar.py`) e Checkpoint 2
+
+Regressão Logística e Árvore de Decisão, split temporal, padronização só no treino, comparação
+com a regra simples (`compat_score`). O vencedor (PR-AUC entre desconhecidos na validação) é
+registrado no MLflow como `opinion-baseline-cc3@champion`.
+
+```bash
+python -m opinion.modelo.treinar             # treina e registra
+python -m opinion.checkpoint2                # Checkpoint 2
+mlflow ui --backend-store-uri sqlite:///mlflow.db   # http://localhost:5000
+```
+
 ---
 
 ## Como rodar
@@ -153,6 +179,10 @@ airflow dags test opinion_pipeline               # com Airflow instalado (AIRFLO
 python -m pytest tests -q                        # testes (inclui o de vazamento)
 jupyter notebook notebooks/eda_encontros.ipynb   # EDA
 python -m opinion.validacao_simulacao            # regera docs/validacao_simulacao.md
+
+# CC3 — baseline e Checkpoint 2
+python -m opinion.modelo.treinar
+python -m opinion.checkpoint2
 ```
 
 Sem broker nem banco, o pipeline também lê direto dos arquivos: `python -m opinion.pipeline.executar --fonte arquivos`.
@@ -174,6 +204,8 @@ Siga a **Opção B** acima, nesta ordem. Cada teste prova uma parte dos requisit
 | 7 | `python -m pytest tests -q` | sem informação do futuro; label e janela de 48 h corretos | CC2 |
 | 8 | abrir `notebooks/eda_encontros.html` | EDA e preparação dos dados com justificativas | CC2 |
 | 9 | `python -m opinion.validacao_simulacao` | premissas, sanidade e sensibilidade | CC2 |
+| 10 | abrir `data/reais/amazon2023/fonte.json` | usuários/obras/avaliações reais com fonte citada | CC3 |
+| 11 | `python -m opinion.checkpoint2` | **Checkpoint 2**: baseline no MLflow supera a regra simples | CC3 |
 
 ### 1. Dataset simulado
 Em `data/bootstrap/relatorio_simulacao.md`, confira: 1.200 usuários, cerca de 54,6 mil encontros e **cerca de 14% com `conectou = 1`**, além de picos de encontros nas semanas 3, 7 e 11 (convenção).
@@ -261,28 +293,29 @@ Para recomeçar do zero, pare a ingestão, apague `data/opinion.db` e repita a p
   - DAG executada no **Airflow 3.1** lendo do banco preenchido pelo MQTT, com as 6 tasks em sucesso e os encontros ao vivo corretamente "aguardando 48 h";
   - testes automatizados;
   - notebook executado do início ao fim;
-  - validação nos 3 cenários.
+  - validação nos 3 cenários (regerada em 22/10/2026 com os usuários reais: 16 OK, 1 atenção);
+  - baseline CC3 no MLflow e **Checkpoint 2** (PR-AUC desconhecidos 0,185 > regra 0,155).
 - **Não testado:** `docker compose` (com PostgreSQL e o container do Airflow), porque o ambiente onde isso foi escrito não tinha Docker. Rodem uma vez antes de apresentar.
 
 ## Estrutura
 
 ```
-config/simulacao.yaml               premissas do simulador
+config/simulacao.yaml               premissas do simulador (usuarios.fonte = amazon2023)
+config/fontes.yaml                  mapeamento Amazon → mídia/gênero do OpiniOn
 config/pipeline.yaml                label, split temporal, janelas e checagens do pipeline
-config/cenarios_sensibilidade.yaml  cenários pessimista / base / otimista
+config/modelo.yaml                  candidatos do baseline, métrica, MLflow
 opinion/                            CC1: simulador, pulseira virtual, ingestão MQTT, banco, checkpoint
+opinion/fontes/                     CC3: download e filtro dos datasets públicos
 opinion/pipeline/                   CC2: etapas do pipeline (usadas pela DAG)
-opinion/validacao_simulacao.py      CC2: gera docs/validacao_simulacao.md
-airflow/dags/opinion_pipeline.py    CC2: a DAG
-airflow/Dockerfile                  imagem do Airflow com as dependências
-notebooks/eda_encontros.ipynb/.html CC2: EDA executada
-tests/test_pipeline.py              vazamento, label, janela de 48 h
-docs/                               contrato MQTT, dicionário de dados, validação da simulação
-data/bootstrap/                     dataset simulado (CC1)
+opinion/modelo/                     CC3: baseline + registro no MLflow
+opinion/checkpoint2.py              CC3: Checkpoint 2
+docs/fontes_dados.md                citação, o que é real, o que é transformação
+data/reais/amazon2023/              amostra filtrada (versionada)
+data/bootstrap/                     encontros simulados sobre os usuários reais
+tests/                              pipeline, fontes, baseline
 ```
 
-## Pendências com o Design
+## Pendências
 
-- Personas definitivas para substituir as provisórias.
-- Respostas da tabela de decisões da sessão. As duas primeiras afetam a política de sinal e talvez o label.
-- Padrões do tópico `feedback`, e o protótipo físico publicando no mesmo contrato.
+Decisões com o Design, pendências de infraestrutura e próximos passos ficam em
+[`docs/status.md`](docs/status.md).

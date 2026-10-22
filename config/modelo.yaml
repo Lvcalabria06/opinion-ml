@@ -1,0 +1,35 @@
+# =====================================================================
+# Baseline do modelo (CC3) — seções 4.4 e 4.5
+# ---------------------------------------------------------------------
+# Treina no split "treino", escolhe algoritmo e limiar no "validacao",
+# mede UMA VEZ no "teste". Padronização só no treino (pipeline sklearn).
+# =====================================================================
+
+mlflow:
+  tracking_uri: sqlite:///mlflow.db
+  experimento: opinion-cc3
+  modelo_registrado: opinion-baseline-cc3
+  alias: champion
+
+# Métrica de escolha (seção 4.5 / decisão D-006): PR-AUC entre desconhecidos.
+# Sempre reportamos também PR-AUC geral, a prevalência e a regra simples.
+metrica: pr_auc_desconhecidos
+desconhecidos: algum_segue == 0
+
+candidatos:
+  regressao_logistica:
+    tipo: logreg
+    grade:
+      C: [0.1, 1.0, 10.0]
+      class_weight: [null, balanced]
+  arvore_decisao:
+    tipo: arvore
+    grade:
+      max_depth: [4, 6, 8]
+      min_samples_leaf: [20, 50]
+
+# Limiar de decisão: maximiza F1 nos desconhecidos da validação.
+# (custo do sinal errado ainda está aberto com o Design; F1 é o padrão até lá.)
+limiar:
+  metrica: f1
+  publico: desconhecidos

@@ -1,0 +1,84 @@
+# =====================================================================
+# Fontes de dados reais (Frente A, Sprint 3) — usuários, obras e avaliações
+# ---------------------------------------------------------------------
+# Fonte: Amazon Reviews 2023 (McAuley Lab, UC San Diego). Mesmos usuários reais avaliando
+# livros, filmes/séries, jogos e música, com nota 1–5 e data. Citação e licença em
+# docs/fontes_dados.md.
+#
+#   python -m opinion.fontes.amazon2023 baixar     # ~300 MB de notas + metadados (streaming)
+#   python -m opinion.fontes.amazon2023 preparar   # gera data/reais/amazon2023/ (versionado)
+# =====================================================================
+
+amazon2023:
+  url_base: https://mcauleylab.ucsd.edu/public_datasets/data/amazon_2023
+  # notas "5-core" (cada usuário e item com >= 5 avaliações na categoria), sem duplicatas
+  categorias:                       # categoria da Amazon -> mídia do OpiniOn
+    Books: livro
+    Movies_and_TV: filme            # vira "serie" quando o item é de TV (ver regras_midia)
+    Video_Games: jogo
+    CDs_and_Vinyl: musica
+
+  # Janela REAL usada: 26 semanas de histórico + 12 semanas de simulação.
+  # Toda data é deslocada por um número inteiro de semanas para cair em 06/07/2026,
+  # preservando dia da semana, horário e a ordem real entre todos os usuários.
+  inicio_real: "2021-07-05"         # segunda-feira; vira 2026-07-06 (+261 semanas)
+  semanas_historico: 26
+  semanas_simulacao: 12
+
+  selecao:
+    n_usuarios: 1200
+    semente: 42
+    min_avaliacoes_na_janela: 3     # ativo nas 38 semanas
+    min_midias: 2                   # avalia pelo menos 2 mídias diferentes (perfil OpiniOn)
+    max_avaliacoes_por_usuario: 300 # as mais recentes até o fim da janela (limita usuários extremos)
+    # cota por mídia dominante: evita que livro e filme (maioria na Amazon) apaguem jogos e música
+    cota_midia_dominante: {livro: 0.30, filme: 0.40, jogo: 0.15, musica: 0.15}
+
+  # Livros que não são entretenimento (fora do escopo do OpiniOn)
+  livros_excluir:
+    - textbooks
+    - test preparation
+    - medical books
+    - law
+    - engineering
+    - computers & technology
+    - business & money
+    - education & teaching
+    - cookbooks
+    - reference
+
+  # Jogos: só itens da categoria "Games" (acessórios, consoles e periféricos ficam de fora)
+  jogos_excluir: [accessories, consoles, controllers, headsets, cables, batteries, skins, cases]
+
+regras_midia:
+  serie_categorias: ["tv", "tv series", "tv shows"]
+  serie_titulo: ["season", "temporada", "the complete series"]
+
+# Gêneros unificados do OpiniOn. Cada gênero casa (palavra inteira, minúsculas) com as categorias
+# da Amazon e o campo "Genre"; nos jogos, também com título e descrição.
+generos:
+  acao_aventura: [action, adventure, platformer]
+  comedia: [comedy, humor]
+  drama: [drama]
+  terror: [horror]
+  suspense_misterio: [mystery, thriller, thrillers, suspense, crime]
+  ficcao_cientifica: [science fiction, sci-fi]
+  fantasia: [fantasy, paranormal]
+  romance: [romance]
+  nao_ficcao: [documentary, biographies, memoirs, history, politics, true crime, science & math, nature]
+  infantil_familia: [kids, children's, family]
+  animacao_quadrinhos: [animation, anime, manga, comics, graphic novels]
+  rpg: [rpg, role-playing, role playing]
+  estrategia_simulacao: [strategy, simulation, wargame, puzzle]
+  esporte_corrida: [sports, racing]
+  tiro_luta: [shooter, fighting, first-person]
+  rock_metal: [rock, metal, punk]
+  pop: [pop]
+  rap_rnb_soul: [rap, hip-hop, r&b, soul]
+  eletronica: [electronic, dance & electronic]
+  jazz_blues: [jazz, blues]
+  classica: [classical, opera, symphonies, chamber music]
+  country_folk: [country, folk, bluegrass]
+  religioso: [christian, gospel, bibles]
+  trilhas_musicais: [soundtracks, musicals, broadway]
+  indie_alternativo: [indie, alternative, independently distributed]
