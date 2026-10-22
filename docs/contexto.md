@@ -27,13 +27,10 @@ ainda será fechado com o Design e vai definir a métrica e o limiar finais.
 
 ## Por que os dados são (ainda) simulados
 
-Não há usuários reais nem pulseira física. O documento do projeto (seção 4.3) prevê dados
-sintéticos, com premissas justificadas e validadas. Consequência que vale para todo o trabalho:
-**qualquer métrica mede a simulação, não usuários reais.**
-
-Em 21/10/2026 o professor avisou que dataset **inventado** perde pontos e aceitou trocar a parte de
-usuários e gosto por **datasets públicos reais** de outras empresas, com fonte citada. Isso está em
-andamento: ver a Frente A em [`status.md`](status.md).
+Não há usuários reais do OpiniOn nem pulseira física. Usuários, obras e avaliações vêm da
+**Amazon Reviews 2023** (mesmas pessoas avaliando livro, filme, jogo e música). Encontros e o
+label `conectou` continuam simulados. Consequência: **qualquer métrica mede essa mistura, não
+usuários reais da pulseira.** Detalhes em [`fontes_dados.md`](fontes_dados.md).
 
 ## Como os dados fluem
 

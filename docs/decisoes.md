@@ -5,6 +5,25 @@ fica em cima. Decisões ainda abertas ficam em [`status.md`](status.md).
 
 ---
 
+## D-010 · 22/10/2026 · Baseline CC3: PR-AUC em desconhecidos, F1 só para o limiar
+
+- **Decisão:** a escolha entre Regressão Logística e Árvore de Decisão usa PR-AUC entre
+  desconhecidos na validação. O limiar de decisão maximiza F1 no mesmo público. A métrica
+  final (custo do sinal errado) continua aberta com o Design.
+- **Consequência:** o Checkpoint 2 exige que o modelo registrado no MLflow supere a regra
+  simples (`compat_score`) em PR-AUC de desconhecidos no teste.
+
+## D-009 · 22/10/2026 · Um dataset unificado: Amazon Reviews 2023
+
+- **Contexto:** o professor aceitou dados reais de outras empresas no lugar do catálogo inventado.
+  Juntar ou separar por mídia ficou a critério da equipe.
+- **Decisão:** um único dataset, [Amazon Reviews 2023](https://amazon-reviews-2023.github.io/)
+  (McAuley Lab, UCSD). Mesmos usuários reais avaliando livro, filme/série, jogo e música.
+  1.200 pessoas sorteadas com cota por mídia dominante; janela real 2021-01-04 a 2021-09-27,
+  deslocada 261 semanas para 2026. Detalhes em [`fontes_dados.md`](fontes_dados.md).
+- **Por que não Spotify+Netflix+Steam:** isso inventaria que pessoas diferentes são a mesma.
+- **O que continua simulado:** encontros da pulseira, rede de seguidores, interações no app, label.
+
 ## D-008 · 21/10/2026 · Trocar dados inventados por datasets públicos reais
 
 - **Contexto:** o professor avisou que usar dataset inventado perde pontos.

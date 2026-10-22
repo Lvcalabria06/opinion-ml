@@ -1,0 +1,44 @@
+{
+  "fonte": "Amazon Reviews 2023 (McAuley Lab, UC San Diego)",
+  "url": "https://amazon-reviews-2023.github.io/",
+  "citacao": "Hou, Y.; Li, J.; He, Z.; Yan, A.; Chen, X.; McAuley, J. Bridging Language and Items for Retrieval and Recommendation. arXiv:2403.03952, 2024.",
+  "arquivos_usados": {
+    "Books": "benchmark/5core/rating_only/Books.csv.gz + raw/meta_categories/meta_Books.jsonl.gz",
+    "Movies_and_TV": "benchmark/5core/rating_only/Movies_and_TV.csv.gz + raw/meta_categories/meta_Movies_and_TV.jsonl.gz",
+    "Video_Games": "benchmark/5core/rating_only/Video_Games.csv.gz + raw/meta_categories/meta_Video_Games.jsonl.gz",
+    "CDs_and_Vinyl": "benchmark/5core/rating_only/CDs_and_Vinyl.csv.gz + raw/meta_categories/meta_CDs_and_Vinyl.jsonl.gz"
+  },
+  "gerado_em": "2026-10-22T13:25:35",
+  "deslocamento_semanas": 261,
+  "notas_5core_total": 19296776,
+  "notas_sem_metadados": 0,
+  "usuarios_elegiveis": 14589,
+  "elegiveis_por_midia_dominante": {
+    "filme": 7320,
+    "livro": 5604,
+    "musica": 1479,
+    "jogo": 186
+  },
+  "janela_real": [
+    "2021-01-04",
+    "2021-09-27"
+  ],
+  "usuarios": 1200,
+  "obras": 48018,
+  "avaliacoes": 58251,
+  "obras_por_midia": {
+    "livro": 19318,
+    "filme": 16872,
+    "musica": 7356,
+    "jogo": 2645,
+    "serie": 1827
+  },
+  "avaliacoes_por_midia": {
+    "livro": 21460,
+    "filme": 21064,
+    "musica": 8634,
+    "jogo": 4884,
+    "serie": 2209
+  },
+  "obras_sem_genero_reconhecido": 17123
+}

@@ -13,8 +13,8 @@
 | 1 | CC1 — dados simulados, pulseira virtual, MQTT, ingestão, Checkpoint 1 | ✅ feito | branch `main` |
 | 2 | CC2 — pipeline no Airflow, EDA, validação da simulação | 🟡 em revisão | [PR #1](https://github.com/Lvcalabria06/opinion-ml/pull/1) (branch `sprint-2-cc2`) |
 | — | Documentação de contexto, status e `AGENTS.md` | 🟡 em revisão | [PR #3](https://github.com/Lvcalabria06/opinion-ml/pull/3) (branch `docs/contexto-agentes` → `sprint-2-cc2`) |
-| — | Troca do dataset inventado por **datasets públicos reais** | 🔴 a fazer (prioridade) | ver [Frente A](#frente-a--datasets-públicos-reais-prioridade) |
-| 3 | CC3 — baseline explicável no MLflow + Checkpoint 2 | 🔴 a fazer | ver [Frente B](#frente-b--cc3-baseline-explicável-no-mlflow) |
+| — | Troca do dataset inventado por **datasets públicos reais** | ✅ feito | Amazon Reviews 2023, [`fontes_dados.md`](fontes_dados.md) · `data/reais/amazon2023/` |
+| 3 | CC3 — baseline explicável no MLflow + Checkpoint 2 | ✅ feito | `opinion/modelo/` · `python -m opinion.checkpoint2` |
 | — | Testar `docker compose up` de ponta a ponta | 🔴 a fazer | ver [Pendências](#pendências-de-infraestrutura) |
 
 Fluxo de trabalho: branches e PRs direto no repositório do Lucas (a equipe é colaboradora, sem fork).
@@ -56,82 +56,37 @@ Quem começa agora: leia [`contexto.md`](contexto.md) (10 min), depois este arqu
 
 ---
 
-## O que falta
+## Sprint 3 — feito nesta branch
 
-### Frente A — Datasets públicos reais (prioridade)
+### Frente A — Datasets públicos reais (Amazon Reviews 2023)
 
-**Origem:** mensagem do Lucas em 21/10/2026. O professor (Diego) avisou que **perderíamos pontos se
-usássemos dataset inventado**. Ele aceitou a proposta de usar **dados reais de usuários publicados
-por outras empresas** (ex.: Spotify para música, Netflix para filme, Steam para jogo), citando a fonte.
-Fica a critério da equipe **juntar tudo num dataset só ou tratar cada mídia separadamente**.
+**Fechado** (D-009): um dataset unificado, [Amazon Reviews 2023](https://amazon-reviews-2023.github.io/).
+1.200 usuários reais, 48.018 obras, 58.251 avaliações. Encontros e label continuam simulados
+(66.344 encontros, 12,3% `conectou`). Detalhes: [`fontes_dados.md`](fontes_dados.md).
 
-**Tarefa:** achar datasets reais de usuários que se encaixem no treino do modelo, filtrar o que for
-preciso e integrar ao repositório e ao pipeline.
+```bash
+python -m opinion.fontes.amazon2023 tudo     # só se data/reais/amazon2023/ não existir
+python -m opinion.gerar_bootstrap
+```
 
-**O que muda e o que fica** (análise inicial, a confirmar no desenho da Frente A):
+### Frente B — CC3: baseline no MLflow e Checkpoint 2
 
-| Parte | Hoje | Com dados reais |
-|---|---|---|
-| Catálogo de obras (`obras.csv`) | inventado | **real** (títulos e gêneros dos datasets) |
-| Avaliações / gosto (`avaliacoes.csv`) | inventado | **real** (notas com data dos datasets) |
-| Usuários (`usuarios.csv`) | inventado | derivado dos usuários reais dos datasets |
-| Encontros da pulseira | simulado | continua simulado, a menos que se use um dataset real de proximidade |
-| Interações no app / label | simulado | continua simulado, a menos que se use um proxy real |
+Regressão logística (`C=0.1`) registrada como `opinion-baseline-cc3@champion`. No teste:
 
-Como a pulseira não existe ainda, **nenhum dataset público tem "encontro + conexão no OpiniOn"**. O
-ganho dos dados reais está em tornar o gosto, a compatibilidade e a rede de amigos reais, e em reduzir
-o quanto o resultado depende das premissas da equipe.
+| | modelo | regra simples | acaso |
+|---|---|---|---|
+| PR-AUC geral | 0.251 | 0.175 | 0.128 |
+| PR-AUC desconhecidos | 0.185 | 0.155 | 0.077 |
 
-**Candidatos a avaliar** (sugestões a verificar: licença, tamanho, se tem data nas notas):
+```bash
+python -m opinion.modelo.treinar
+python -m opinion.checkpoint2          # CHECKPOINT 2 OK
+mlflow ui --backend-store-uri sqlite:///mlflow.db
+```
 
-| Dataset | Mídia | Por que interessa |
-|---|---|---|
-| [Amazon Reviews 2023](https://amazon-reviews-2023.github.io/) (McAuley Lab, UCSD) | livros, filmes/séries, jogos, música | **mesmo usuário em várias mídias**, nota 1–5 e data: evita juntar pessoas diferentes artificialmente |
-| [MovieLens](https://grouplens.org/datasets/movielens/) (GroupLens) | filmes | referência acadêmica, notas com data, licença clara para pesquisa |
-| [Goodreads / UCSD Book Graph](https://mengtingwan.github.io/data/goodreads.html) | livros | notas e reviews com data |
-| [Steam (UCSD)](https://cseweb.ucsd.edu/~jmcauley/datasets.html#steam_data) | jogos | reviews e tempo de jogo |
-| Netflix Prize (Kaggle) | filmes e séries | notas com data |
-| Last.fm 1K / 360K | música | histórico de escuta com data (Spotify não publica notas de usuário) |
-| [Copenhagen Networks Study](https://doi.org/10.1038/s41597-019-0325-x) | — | **proximidade Bluetooth real** entre ~700 estudantes, com RSSI e rede de amizade: o análogo mais próximo da pulseira |
+---
 
-**Decisões abertas da Frente A** (registrar em [`decisoes.md`](decisoes.md) quando fechadas):
-1. Um dataset unificado ou um por mídia?
-2. Como montar o "usuário OpiniOn": um usuário real de uma plataforma, ou o mesmo usuário em várias
-   mídias (Amazon), ou combinação de usuários de plataformas diferentes (exige justificar)?
-3. Os encontros continuam simulados sobre esses usuários reais, ou usamos proximidade real (Copenhagen)?
-4. Onde ficam os arquivos grandes: versionados no Git (só uma amostra filtrada) ou baixados por script?
-
-**Critério de pronto da Frente A:** o bootstrap usa obras e avaliações reais com fonte citada
-(`docs/fontes_dados.md`), o pipeline do CC2 roda sem mudanças de interface, os testes passam e a
-validação da simulação é regerada.
-
-### Frente B — CC3: baseline explicável no MLflow
-
-**Pedido (S12):** baseline explicável — **Regressão Logística ou Árvore de Decisão** — registrado no
-**MLflow**, com split temporal e comparação com a **regra simples de compatibilidade**. É o
-**Checkpoint 2**.
-
-O que já existe para reaproveitar:
-- Entrada pronta: `data/processed/dataset_modelo.parquet` e `metadados.json` (lista de features, coluna
-  de label `conectou`, coluna de grupo `par_id`).
-- Regra simples: ordenar por `compat_score` (pesos em `config/pipeline.yaml`).
-- Protótipo de modelos e métricas em `opinion/validacao_simulacao.py` (funções `modelos()` e `avaliar()`).
-
-Requisitos que o baseline precisa respeitar:
-- Treinar no `treino`, escolher hiperparâmetros e limiar no `validacao`, medir **uma vez** no `teste`.
-- Padronização (`StandardScaler`) **dentro** do pipeline do sklearn, ajustada só no treino.
-- Métrica principal: **PR-AUC**, reportada para todos e **só para desconhecidos** (`algum_segue == 0`),
-  sempre ao lado da prevalência (acaso) e da regra simples.
-- Registrar no MLflow: parâmetros, métricas, lista de features, versão do dataset e o modelo no
-  Model Registry. A explicação (coeficientes ou a árvore) vai como artefato.
-- Variáveis de `verdade_simulacao_NAO_USAR_COMO_FEATURE/` nunca entram no modelo.
-
-**Critério de pronto da Frente B:** um comando treina e registra o baseline; a UI do MLflow mostra o
-run com PR-AUC (geral e desconhecidos) acima da regra simples no teste; README e este arquivo atualizados.
-
-**Ordem sugerida:** desenhar a Frente A primeiro (ela muda os dados), mas escrever o código do CC3
-lendo só `dataset_modelo.parquet` + `metadados.json`. Assim o baseline roda nos dados atuais e
-volta a rodar sem mudança quando os dados reais entrarem.
+## O que ainda falta
 
 ### Para fechar com o Design
 

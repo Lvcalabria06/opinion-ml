@@ -3,7 +3,7 @@
 Modelo que responde: **dois usuários acabaram de se encontrar; qual a chance de interagirem no app em
 até 48 h?** A resposta decide se a pulseira do OpiniOn dá um sinal. Projeto acadêmico entregue em
 sprints (requisitos CC1, CC2, CC3…). Os dados são simulados (não há usuários reais nem pulseira) e
-estão migrando para datasets públicos reais.
+Usuários, obras e avaliações vêm da Amazon Reviews 2023; encontros e o label ainda são simulados.
 
 ## Antes de começar qualquer tarefa
 
@@ -46,9 +46,13 @@ métricas melhorem.
 
 ```bash
 pip install -r requirements-analise.txt && cp .env.example .env    # uma vez
-python -m opinion.pipeline.executar --fonte arquivos                # pipeline sem broker nem banco
-python -m pytest tests -q                                           # vazamento, label, janela de 48 h
+python -m pytest tests -q                                           # fontes, pipeline, baseline
+python -m opinion.pipeline.executar --fonte arquivos                # se data/processed/ estiver vazio
+python -m opinion.modelo.treinar                                    # CC3 → MLflow
+python -m opinion.checkpoint2                                       # Checkpoint 2
 ```
+
+Sem `data/reais/amazon2023/`: `python -m opinion.fontes.amazon2023 tudo` e depois `python -m opinion.gerar_bootstrap`.
 
 O roteiro completo (MQTT, Checkpoint 1, Airflow, Docker) e as saídas esperadas estão no [README](README.md).
 
@@ -67,4 +71,5 @@ O roteiro completo (MQTT, Checkpoint 1, Airflow, Docker) e as saídas esperadas 
 | [`docs/decisoes.md`](docs/decisoes.md) | for mudar algo que parece arbitrário (split, métrica, padronização) |
 | [`docs/dicionario_dados.md`](docs/dicionario_dados.md) | mexer em dados, features ou no dataset do modelo |
 | [`docs/contrato_mqtt.md`](docs/contrato_mqtt.md) | mexer na pulseira virtual, na ingestão ou falar com o Design |
+| [`docs/fontes_dados.md`](docs/fontes_dados.md) | mexer em usuários, obras, avaliações ou baixar dados externos |
 | [`docs/validacao_simulacao.md`](docs/validacao_simulacao.md) | mudar premissas do simulador ou interpretar resultados |

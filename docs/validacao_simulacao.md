@@ -1,13 +1,13 @@
 # Validação da simulação — OpiniOn (CC2)
 
-Gerado por `python -m opinion.validacao_simulacao` em 14/10/2026 16:01 (66 s). Seção 4.3 do documento do projeto.
+Gerado por `python -m opinion.validacao_simulacao` em 22/10/2026 13:27 (28 s). Seção 4.3 do documento do projeto.
 
 > O desempenho de qualquer modelo treinado com estes dados mede a **simulação**, não o comportamento real dos usuários do OpiniOn. Este documento mostra o que foi assumido, se os dados são plausíveis e se as conclusões dependem demais das premissas.
 
 ## Resumo
 
 - **Checagens de sanidade:** 16 OK, 1 atenção, 0 falha(s).
-- **Sensibilidade:** 6 de 8 conclusões se mantêm nos 3 cenários.
+- **Sensibilidade:** 7 de 8 conclusões se mantêm nos 3 cenários.
 - **Principal premissa a revisar:** a proximidade (RSSI) não influencia a conexão entre desconhecidos na simulação. Sugestão: incluir o RSSI no processo do label na próxima versão do simulador, ou confirmar com os dados reais da semana 16 se ele importa.
 
 ## 1. Premissas
@@ -55,23 +55,23 @@ Se sorteado, um dos dois interage com o outro no app depois de um atraso aleató
 
 | Status | Checagem | Valor | Faixa plausível | Por quê |
 |---|---|---|---|---|
-| ✅ OK | Taxa geral de conexão | 13.6% | 5%–25% | Problema desbalanceado, mas com positivos suficientes para treinar (seção 4.3). |
-| ✅ OK | Desconhecidos conectam menos que quem já se segue | 7.8% x 27.4% | desconhecidos < amigos | Amigos interagem no app de qualquer jeito. |
-| ✅ OK | Desconhecidos: taxa de conexão | 7.8% | 2%–15% | Abordagem entre estranhos é rara; acima de 15% seria otimista demais. |
-| ✅ OK | Duração mediana por local | campus 4.0 min, cinema 7.7 min, convencao_games 7.4 min, livraria 3.8 min | 1–30 min em todos | Encontros de segundos seriam passagens; de horas, só entre amigos. |
+| ✅ OK | Taxa geral de conexão | 12.3% | 5%–25% | Problema desbalanceado, mas com positivos suficientes para treinar (seção 4.3). |
+| ✅ OK | Desconhecidos conectam menos que quem já se segue | 7.0% x 27.3% | desconhecidos < amigos | Amigos interagem no app de qualquer jeito. |
+| ✅ OK | Desconhecidos: taxa de conexão | 7.0% | 2%–15% | Abordagem entre estranhos é rara; acima de 15% seria otimista demais. |
+| ✅ OK | Duração mediana por local | campus 4.1 min, cinema 7.6 min, convencao_games 7.7 min, livraria 3.5 min | 1–30 min em todos | Encontros de segundos seriam passagens; de horas, só entre amigos. |
 | ✅ OK | Nenhum encontro menor que 30 s | mínimo 30 s | >= 30 s | A pulseira descarta contatos curtos (gente só passando). |
-| ✅ OK | RSSI médio | -61.1 dBm | -75 a -50 dBm | Equivale a ~0,5–3 m de distância. |
-| ✅ OK | Encontros por usuário por semana | 7.6 | 0,5–20 | Plausível para quem frequenta campus e eventos culturais. |
-| ✅ OK | Concentração: 10% mais ativos | 22.4% dos encontros | <= 40% | Evita que poucos usuários dominem o dataset (e o modelo). |
+| ✅ OK | RSSI médio | -61.4 dBm | -75 a -50 dBm | Equivale a ~0,5–3 m de distância. |
+| ✅ OK | Encontros por usuário por semana | 9.2 | 0,5–20 | Plausível para quem frequenta campus e eventos culturais. |
+| ✅ OK | Concentração: 10% mais ativos | 22.0% dos encontros | <= 40% | Evita que poucos usuários dominem o dataset (e o modelo). |
 | ✅ OK | Campus só em dias úteis | 100.0% | 100% | Premissa de funcionamento. |
 | ✅ OK | Convenção só nos fins de semana de evento | sim | semanas [3, 7, 11], sáb/dom | Premissa de calendário. |
 | ✅ OK | Encontros entre 8h e 23h59 | 100.0% | 100% | Horário de funcionamento dos locais. |
 | ✅ OK | Nenhum encontro com pulseira pausada | 0 encontros | 0 | Modo pausado = pulseira não anuncia (seção 3.3). |
 | ✅ OK | Estabilidade semanal da taxa de conexão | desvio 0.6 p.p. | <= 1,5 p.p. | Sem mudança brusca entre treino/validação/teste — o split temporal mede o modelo, não a base. |
-| ✅ OK | Encontros repetidos do mesmo par | 30.7% | 10%–60% | Necessário para a feature de encontros anteriores e o k-fold agrupado por par. |
-| ✅ OK | Conexões causadas que só aparecem depois de 48 h | 3.3% | 1%–15% | A janela de 48 h perde algumas conexões tardias, como na vida real. |
-| ✅ OK | Toque mais frequente quando há conexão | 17.5% x 10.7% | conectou > não conectou | O toque deve carregar algum sinal de interesse. |
-| ⚠️ ATENÇÃO | Proximidade (RSSI) influencia conexão entre desconhecidos | AUC 0.499 | AUC >= 0,52 | Esperado no mundo real (quem conversa fica mais perto). Na simulação o RSSI não entra no processo do label — premissa a revisar. |
+| ✅ OK | Encontros repetidos do mesmo par | 28.2% | 10%–60% | Necessário para a feature de encontros anteriores e o k-fold agrupado por par. |
+| ✅ OK | Conexões causadas que só aparecem depois de 48 h | 3.2% | 1%–15% | A janela de 48 h perde algumas conexões tardias, como na vida real. |
+| ✅ OK | Toque mais frequente quando há conexão | 13.9% x 9.8% | conectou > não conectou | O toque deve carregar algum sinal de interesse. |
+| ⚠️ ATENÇÃO | Proximidade (RSSI) influencia conexão entre desconhecidos | AUC 0.510 | AUC >= 0,52 | Esperado no mundo real (quem conversa fica mais perto). Na simulação o RSSI não entra no processo do label — premissa a revisar. |
 
 ## 3. Análise de sensibilidade
 
@@ -79,51 +79,51 @@ O dataset foi gerado de novo em três cenários (`config/cenarios_sensibilidade.
 
 | Cenário | O que muda | Encontros | Taxa de conexão | Entre desconhecidos |
 |---|---|---|---|---|
-| **pessimista** | Menos conexões, mais ruído, gosto e contexto pesam menos | 54,122 | 14.4% | 3.8% |
-| **base** | Premissas atuais (config/simulacao.yaml) | 54,054 | 13.7% | 7.8% |
-| **otimista** | Mais conexões, menos ruído, gosto e contexto pesam mais | 54,232 | 16.9% | 15.9% |
+| **pessimista** | Menos conexões, mais ruído, gosto e contexto pesam menos | 64,150 | 12.6% | 3.7% |
+| **base** | Premissas atuais (config/simulacao.yaml) | 65,443 | 12.3% | 7.0% |
+| **otimista** | Mais conexões, menos ruído, gosto e contexto pesam mais | 65,817 | 15.6% | 14.6% |
 
 ### PR-AUC no teste (semanas 11–12) — todos os encontros
 
 | Modelo | pessimista | base | otimista |
 |---|---|---|---|
-| Regra simples (compatibilidade) | 0.138 | 0.166 | 0.245 |
-| Regressão logística | 0.368 | 0.254 | 0.314 |
-| Árvore de decisão | 0.368 | 0.241 | 0.302 |
-| Random Forest | 0.367 | 0.257 | 0.326 |
-| *prevalência (acaso)* | *0.139* | *0.142* | *0.187* |
+| Regra simples (compatibilidade) | 0.126 | 0.175 | 0.317 |
+| Regressão logística | 0.339 | 0.251 | 0.323 |
+| Árvore de decisão | 0.341 | 0.252 | 0.373 |
+| Random Forest | 0.356 | 0.259 | 0.422 |
+| *prevalência (acaso)* | *0.124* | *0.128* | *0.172* |
 
 ### PR-AUC no teste — só desconhecidos (o público real da pulseira)
 
 | Modelo | pessimista | base | otimista |
 |---|---|---|---|
-| Regra simples (compatibilidade) | 0.051 | 0.129 | 0.264 |
-| Regressão logística | 0.057 | 0.163 | 0.362 |
-| Árvore de decisão | 0.059 | 0.153 | 0.325 |
-| Random Forest | 0.060 | 0.176 | 0.357 |
-| *prevalência (acaso)* | *0.041* | *0.089* | *0.180* |
+| Regra simples (compatibilidade) | 0.058 | 0.155 | 0.380 |
+| Regressão logística | 0.064 | 0.185 | 0.449 |
+| Árvore de decisão | 0.062 | 0.174 | 0.429 |
+| Random Forest | 0.063 | 0.200 | 0.477 |
+| *prevalência (acaso)* | *0.039* | *0.077* | *0.162* |
 
 ### Taxa de conexão entre desconhecidos por contexto
 
 | Contexto | pessimista | base | otimista |
 |---|---|---|---|
-| convencao_games | 5.5% | 12.6% | 26.1% |
-| cinema | 4.2% | 8.9% | 19.1% |
-| livraria | 3.3% | 6.0% | 11.8% |
-| campus | 2.5% | 4.1% | 7.4% |
+| convencao_games | 5.6% | 11.0% | 23.6% |
+| cinema | 4.8% | 9.8% | 20.7% |
+| livraria | 3.4% | 6.0% | 13.2% |
+| campus | 2.3% | 4.0% | 7.1% |
 
 ### As conclusões se mantêm?
 
 | Conclusão | Mantém nos 3 cenários? | Detalhe |
 |---|---|---|
-| Todo modelo supera a regra simples (todos os encontros) | ✅ sim | pessimista: regra 0.138; base: regra 0.166; otimista: regra 0.245 |
+| Todo modelo supera a regra simples (todos os encontros) | ✅ sim | pessimista: regra 0.126; base: regra 0.175; otimista: regra 0.317 |
 | Todo modelo supera a regra simples (só desconhecidos) | ✅ sim |  |
-| O melhor modelo supera a regra simples (só desconhecidos) | ✅ sim | pessimista: 0.060 x regra 0.051; base: 0.176 x regra 0.129; otimista: 0.362 x regra 0.264 |
-| O melhor modelo é o mesmo | ❌ não | pessimista: Árvore de decisão (+0.000 sobre o 2º); base: Random Forest (+0.002 sobre o 2º); otimista: Random Forest (+0.012 sobre o 2º) |
+| O melhor modelo supera a regra simples (só desconhecidos) | ✅ sim | pessimista: 0.064 x regra 0.058; base: 0.200 x regra 0.155; otimista: 0.477 x regra 0.380 |
+| O melhor modelo é o mesmo | ✅ sim | pessimista: Random Forest (+0.015 sobre o 2º); base: Random Forest (+0.007 sobre o 2º); otimista: Random Forest (+0.049 sobre o 2º) |
 | Ordem dos contextos entre desconhecidos é a mesma | ✅ sim | pessimista: convencao_games > cinema > livraria > campus; base: convencao_games > cinema > livraria > campus; otimista: convencao_games > cinema > livraria > campus |
-| Convenção converte mais que campus (desconhecidos) | ✅ sim | pessimista: 2.3×; base: 3.1×; otimista: 3.5× |
-| As 3 features mais importantes (Random Forest) se repetem (≥ 2 de 3) | ❌ não | pessimista: seguem_mutuamente, algum_segue, horas_desde_ultimo_encontro_par; base: seguem_mutuamente, algum_segue, log_duracao; otimista: log_duracao, compat_score, sim_generos |
-| Problema continua desbalanceado (3%–30% positivos) | ✅ sim | 14.4%, 13.7%, 16.9% |
+| Convenção converte mais que campus (desconhecidos) | ✅ sim | pessimista: 2.4×; base: 2.7×; otimista: 3.3× |
+| As 3 features mais importantes (Random Forest) se repetem (≥ 2 de 3) | ❌ não | pessimista: seguem_mutuamente, algum_segue, horas_desde_ultimo_encontro_par; base: seguem_mutuamente, sim_generos, algum_segue; otimista: sim_generos, compat_score, log_duracao |
+| Problema continua desbalanceado (3%–30% positivos) | ✅ sim | 12.6%, 12.3%, 15.6% |
 
 **Leitura.** Os números absolutos mudam bastante entre cenários (é esperado: as premissas mudam a dificuldade do problema). O que importa é que a **comparação** se sustente — se uma conclusão só vale no cenário base, ela não deve ser apresentada como resultado do projeto.
 
@@ -131,7 +131,6 @@ Repare que o cenário pessimista tem PR-AUC *geral* mais alta que o base: nele o
 
 **O que não se manteve e o que isso significa:**
 
-- *O melhor modelo é o mesmo.* As diferenças entre os modelos simples são pequenas (centésimos de PR-AUC) e a ordem muda conforme as premissas. Ou seja: com estes dados, não dá para afirmar que um algoritmo é 'o melhor' para o OpiniOn. A escolha no CC4 deve se apoiar em validação cruzada (CC6), em critérios como explicabilidade e calibração, e ser reavaliada com dados reais.
 - *As 3 features mais importantes (Random Forest) se repetem (≥ 2 de 3).* A importância das features depende das premissas: quando a compatibilidade pesa mais (otimista), as features de gosto sobem ao topo; quando pesa menos (pessimista), dominam as de relação prévia. Portanto, rankings de importância obtidos nestes dados NÃO devem ser apresentados como descoberta sobre os usuários reais — apenas como consequência das premissas.
 
 ## 4. Comparação com dados reais (semana 16)
