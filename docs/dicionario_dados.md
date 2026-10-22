@@ -3,6 +3,10 @@
 Pasta `data/bootstrap/`. Período simulado: **06/07/2026 a 27/09/2026 (12 semanas)**, mais 48 h de
 interações depois do fim para não cortar o label dos últimos encontros.
 
+> Hoje tudo aqui é gerado pelo simulador. Obras, avaliações e usuários vão passar a vir de datasets
+> públicos reais (Frente A em [`status.md`](status.md)); ao mudar, atualize este dicionário com as
+> colunas novas e a fonte de cada arquivo.
+
 ```
 data/bootstrap/
 ├── historico_app/        o que o APP guarda (entra no banco pela carga)

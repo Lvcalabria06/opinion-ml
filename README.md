@@ -9,8 +9,12 @@ Este repositório acumula as entregas de CC sprint a sprint.
 |---|---|---|---|
 | 1 | **CC1** | Pulseira virtual publicando via MQTT, serviço de ingestão, banco, dataset simulado de 12 semanas, Checkpoint 1 | `opinion/` · `docs/contrato_mqtt.md` |
 | 2 | **CC2** | Pipeline no Airflow (ingestão, compatibilidade, features, label, preparação), notebook de EDA, validação da simulação, material da sessão com o Design | `opinion/pipeline/` · `airflow/dags/` · `notebooks/` · `docs/validacao_simulacao.md` |
+| 3 | **CC3** | *Em andamento:* baseline explicável no MLflow (Checkpoint 2) e troca para datasets públicos reais | [`docs/status.md`](docs/status.md) |
 
 Tudo usa **dados sintéticos** (seção 4.3). Qualquer métrica mede a simulação, não usuários reais.
+
+**Chegando agora?** Leia [`docs/contexto.md`](docs/contexto.md) (o projeto em 10 minutos) e
+[`docs/status.md`](docs/status.md) (o que está feito e o que falta). Agentes de IA: [`AGENTS.md`](AGENTS.md).
 
 ---
 
@@ -277,12 +281,12 @@ airflow/dags/opinion_pipeline.py    CC2: a DAG
 airflow/Dockerfile                  imagem do Airflow com as dependências
 notebooks/eda_encontros.ipynb/.html CC2: EDA executada
 tests/test_pipeline.py              vazamento, label, janela de 48 h
-docs/                               contrato MQTT, dicionário de dados, validação da simulação
+docs/                               contexto, status, decisões, contrato MQTT, dicionário de dados, validação
 data/bootstrap/                     dataset simulado (CC1)
+AGENTS.md                           regras e roteiro para agentes de IA (CLAUDE.md aponta para ele)
 ```
 
-## Pendências com o Design
+## Pendências
 
-- Personas definitivas para substituir as provisórias.
-- Respostas da tabela de decisões da sessão. As duas primeiras afetam a política de sinal e talvez o label.
-- Padrões do tópico `feedback`, e o protótipo físico publicando no mesmo contrato.
+Decisões com o Design, pendências de infraestrutura e próximos passos ficam em
+[`docs/status.md`](docs/status.md).
