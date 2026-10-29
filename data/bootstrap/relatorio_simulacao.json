@@ -1,12 +1,12 @@
 {
   "usuarios": 1200,
-  "obras": 600,
-  "avaliacoes": 60787,
-  "seguidores": 6541,
-  "interacoes": 42846,
-  "encontros": 54586,
-  "toques_interesse": 6658,
-  "trocas_de_modo": 2396,
-  "taxa_conectou": 0.1364,
-  "taxa_conexao_causada": 0.0564
+  "obras": 48018,
+  "avaliacoes": 58251,
+  "seguidores": 6648,
+  "interacoes": 43280,
+  "encontros": 66344,
+  "toques_interesse": 7172,
+  "trocas_de_modo": 2344,
+  "taxa_conectou": 0.123,
+  "taxa_conexao_causada": 0.0533
 }

@@ -62,15 +62,26 @@ def montar(encontros: pd.DataFrame, compat: pd.DataFrame, feats: pd.DataFrame, r
     inicio0 = pd.Timestamp(cfg["split"]["treino"][0])
     df["semana"] = ((df.inicio - inicio0).dt.days // 7 + 1).astype(int)
     df["split"] = marcar_split(df, cfg)
+    return completar(df).sort_values("inicio").reset_index(drop=True)
+
+
+def completar(df: pd.DataFrame) -> pd.DataFrame:
+    """Colunas derivadas e imputação — as mesmas no treino e na pontuação de encontros novos."""
     df["tem_obras_comuns"] = (df.n_obras_comuns > 0).astype(int)
     df["sim_notas"] = df.sim_notas.fillna(0.5)     # neutro quando não há obra em comum (+ indicador acima)
-    return df.sort_values("inicio").reset_index(drop=True)
+    return df
 
 
 def codificar(df: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
     dummies = pd.get_dummies(df[CATEGORICAS], prefix=CATEGORICAS, dtype=int)
     X = pd.concat([df[NUMERICAS], dummies], axis=1)
     return X, list(X.columns)
+
+
+def matriz_features(df: pd.DataFrame, colunas_x: list[str]) -> pd.DataFrame:
+    """X no formato exato do treino (mesmas colunas e ordem). Categoria ausente no lote vira 0."""
+    X, _ = codificar(df)
+    return X.reindex(columns=colunas_x, fill_value=0)
 
 
 def checar_qualidade(dm: pd.DataFrame, colunas_x: list[str], cfg: dict) -> list[str]:

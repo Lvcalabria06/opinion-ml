@@ -2,7 +2,8 @@
 Gerador do bootstrap dataset (CC1) — 12 semanas de encontros entre usuários do OpiniOn.
 
 O que é simulado
-  * usuários com perfil de gosto (personas provisórias), obras e avaliações com data
+  * usuários, obras e avaliações: REAIS (Amazon Reviews 2023) quando
+    config/simulacao.yaml -> usuarios.fonte = amazon2023; senão, sintéticos
   * grupos de amigos e quem segue quem
   * idas a cinema, livraria, campus e convenção de games; quem está no mesmo lugar e
     turno pode se encontrar -> a pulseira virtual registra o ENCONTRO
@@ -32,7 +33,7 @@ import numpy as np
 import pandas as pd
 
 from opinion.contrato import token_do_dia
-from opinion.mundo import GENEROS, PASTA_BOOTSTRAP, CONFIG_PADRAO, atributos_encontro, carregar_config, sigmoide
+from opinion.mundo import GENEROS, PASTA_BOOTSTRAP, CONFIG_PADRAO, RAIZ, atributos_encontro, carregar_config, sigmoide
 
 TIPOS_INTERACAO = ["abrir_perfil", "seguir", "curtir_review", "comentar_review", "salvar_obra"]
 PESOS_INTERACAO_CONEXAO = [0.35, 0.25, 0.25, 0.10, 0.05]
@@ -43,6 +44,19 @@ def _hm(s: str) -> timedelta:
     return timedelta(hours=int(h), minutes=int(m))
 
 
+MIDIAS = ["filme", "serie", "jogo", "livro", "musica"]
+
+
+def carregar_reais(pasta: Path) -> dict[str, pd.DataFrame]:
+    """Usuários, obras e avaliações reais preparados por opinion.fontes (ex.: amazon2023)."""
+    pasta = Path(pasta) if Path(pasta).is_absolute() else RAIZ / pasta
+    if not (pasta / "avaliacoes.csv").exists():
+        raise FileNotFoundError(f"{pasta} não tem os dados reais. Rode: python -m opinion.fontes.amazon2023 tudo")
+    av = pd.read_csv(pasta / "avaliacoes.csv", parse_dates=["criado_em"])
+    return {"usuarios": pd.read_csv(pasta / "usuarios.csv"), "obras": pd.read_csv(pasta / "obras.csv"),
+            "avaliacoes": av.sort_values(["criado_em", "avaliacao_id"]).reset_index(drop=True)}
+
+
 class Simulador:
     def __init__(self, cfg: dict):
         self.cfg = cfg
@@ -51,10 +65,19 @@ class Simulador:
         self.inicio = datetime.fromisoformat(s["data_inicio"])
         self.dias = 7 * s["semanas"]
         self.fim = self.inicio + timedelta(days=self.dias)
-        self.n = s["n_usuarios"]
+        self.fonte = cfg.get("usuarios", {}).get("fonte", "sintetico")
+        self.reais = carregar_reais(cfg["usuarios"]["pasta"]) if self.fonte != "sintetico" else None
+        self.n = len(self.reais["usuarios"]) if self.reais else s["n_usuarios"]
+        self.generos = GENEROS
 
     # ================================================================ catálogo
     def gerar_obras(self):
+        if self.reais:
+            self.obras = self.reais["obras"][["obra_id", "titulo", "midia", "generos", "popularidade"]].copy()
+            self.generos = sorted({g for gs in self.obras.generos for g in gs.split("|")})
+            self.obra_vet = {o: np.isin(self.generos, gs.split("|")).astype(float)
+                             for o, gs in zip(self.obras.obra_id, self.obras.generos)}
+            return
         rng, n = self.rng, self.cfg["simulacao"]["n_obras"]
         midias = rng.choice(["filme", "serie", "jogo", "livro", "musica"], size=n, p=[0.3, 0.25, 0.2, 0.15, 0.1])
         linhas, cont = [], defaultdict(int)
@@ -70,15 +93,44 @@ class Simulador:
                                 for m, g in self.obras.groupby("midia")}
 
     # ================================================================ usuários
+    def _perfil_real(self):
+        """Persona, atividade e gosto a partir das avaliações reais de cada pessoa."""
+        P, av = self.cfg["personas"], self.reais["avaliacoes"]
+        idx = {u: i for i, u in enumerate(self.uid)}
+        midia_obra = dict(zip(self.obras.obra_id, self.obras.midia))
+        ui = av.usuario_id.map(idx).to_numpy()
+
+        mix = np.zeros((self.n, len(MIDIAS)))
+        np.add.at(mix, (ui, av.obra_id.map(midia_obra).map(MIDIAS.index).to_numpy()), 1.0)
+        nomes = list(P)
+        alvo = np.array([[P[p]["midias"].get(m, 0.0) for m in MIDIAS] for p in nomes])
+        cos = (mix / np.linalg.norm(mix, axis=1, keepdims=True)) @ (alvo / np.linalg.norm(alvo, axis=1, keepdims=True)).T
+        self.persona = np.array(nomes)[cos.argmax(1)]
+
+        semanas = self.cfg["usuarios"].get("semanas_atividade", 38)
+        recentes = av[av.criado_em >= self.fim - timedelta(weeks=semanas)]
+        self.atividade = np.maximum(np.bincount(recentes.usuario_id.map(idx), minlength=self.n) / semanas, 0.05)
+
+        peso = np.clip(av.nota.to_numpy() - 2.0, 0, None)            # 1–2 estrelas não puxam o gosto
+        vet = np.stack([self.obra_vet[o] for o in av.obra_id])
+        vet = vet / vet.sum(1, keepdims=True)
+        self.gosto = np.zeros((self.n, len(self.generos)))
+        np.add.at(self.gosto, ui, vet * peso[:, None])
+        self.gosto += 1e-6
+
     def gerar_usuarios(self):
         rng, P = self.rng, self.cfg["personas"]
-        nomes = list(P)
-        pesos = np.array([P[p]["peso"] for p in nomes]); pesos /= pesos.sum()
-        self.persona = rng.choice(nomes, size=self.n, p=pesos)
-        self.uid = [f"usr-{i+1:05d}" for i in range(self.n)]
+        if self.reais:
+            self.uid = self.reais["usuarios"].usuario_id.tolist()
+            self._perfil_real()
+        else:
+            nomes = list(P)
+            pesos = np.array([P[p]["peso"] for p in nomes]); pesos /= pesos.sum()
+            self.persona = rng.choice(nomes, size=self.n, p=pesos)
+            self.uid = [f"usr-{i+1:05d}" for i in range(self.n)]
+            self.atividade = np.array([P[p]["avaliacoes_semana"] for p in self.persona]) * rng.lognormal(0, 0.4, self.n)
+            self.gosto = rng.dirichlet(np.full(len(GENEROS), 0.6), self.n)
         self.abertura = np.array([rng.beta(*P[p]["abertura_social"]) for p in self.persona])
-        self.atividade = np.array([P[p]["avaliacoes_semana"] for p in self.persona]) * rng.lognormal(0, 0.4, self.n)
-        self.gosto = rng.dirichlet(np.full(len(GENEROS), 0.6), self.n)
         normas = np.linalg.norm(self.gosto, axis=1, keepdims=True)
         self.gosto_unit = self.gosto / normas
         # média da compatibilidade latente entre pares aleatórios (para centralizar o efeito)
@@ -86,7 +138,11 @@ class Simulador:
         c = (self.gosto_unit[i] * self.gosto_unit[j]).sum(1)
         self.compat_media, self.compat_dp = float(c.mean()), float(c.std())
 
-        cadastro = [(self.inicio - timedelta(days=int(d))).date().isoformat() for d in rng.integers(7 * 26, 400, self.n)]
+        if self.reais:
+            primeira = pd.to_datetime(self.reais["usuarios"].primeira_avaliacao)
+            cadastro = [min(d, self.inicio - timedelta(days=7)).date().isoformat() for d in primeira]
+        else:
+            cadastro = [(self.inicio - timedelta(days=int(d))).date().isoformat() for d in rng.integers(7 * 26, 400, self.n)]
         self.usuarios = pd.DataFrame({"usuario_id": self.uid, "pulseira_id": [f"PUL-{i+1:04d}" for i in range(self.n)],
                                       "data_cadastro": cadastro})
 
@@ -129,6 +185,18 @@ class Simulador:
 
     # ================================================================ avaliações
     def gerar_avaliacoes(self):
+        if self.reais:
+            av = self.reais["avaliacoes"]
+            av = av[av.criado_em < self.fim + timedelta(days=2)]
+            self.avaliacoes = av[["avaliacao_id", "usuario_id", "obra_id", "nota", "criado_em"]].reset_index(drop=True)
+            idx = {u: i for i, u in enumerate(self.uid)}
+            self.aval_por_usuario = defaultdict(list)
+            for u, t, o in zip(av.usuario_id, av.criado_em, av.obra_id):
+                self.aval_por_usuario[idx[u]].append((t.to_pydatetime(), o))
+            for u in self.aval_por_usuario:
+                self.aval_por_usuario[u].sort()
+            self.aval_id = {(r.usuario_id, r.obra_id): r.avaliacao_id for r in self.avaliacoes.itertuples()}
+            return
         rng, P = self.rng, self.cfg["personas"]
         semanas_prev = self.cfg["simulacao"]["semanas_historico_previo"]
         ini_prev = self.inicio - timedelta(weeks=semanas_prev)

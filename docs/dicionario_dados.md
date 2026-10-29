@@ -1,7 +1,12 @@
-# Dicionário de dados — bootstrap dataset (CC1)
+# Dicionário de dados — bootstrap dataset
+
+> Usuários, obras e avaliações vêm da Amazon Reviews 2023 (amostra em `data/reais/amazon2023/`,
+> fonte em [`fontes_dados.md`](fontes_dados.md)). Encontros, seguidores, interações e o label
+> continuam gerados pelo simulador.
 
 Pasta `data/bootstrap/`. Período simulado: **06/07/2026 a 27/09/2026 (12 semanas)**, mais 48 h de
-interações depois do fim para não cortar o label dos últimos encontros.
+interações depois do fim para não cortar o label dos últimos encontros. As datas das avaliações
+reais foram deslocadas 261 semanas para cair nesse calendário.
 
 ```
 data/bootstrap/
@@ -10,15 +15,17 @@ data/bootstrap/
 ├── rotulos_referencia.csv
 ├── relatorio_simulacao.md
 └── verdade_simulacao_NAO_USAR_COMO_FEATURE/
+
+data/reais/amazon2023/    amostra filtrada da Amazon (entrada do simulador)
 ```
 
 ## `historico_app/`
 
 | Arquivo | Colunas | Observação |
 |---|---|---|
-| `usuarios.csv` | usuario_id, pulseira_id, data_cadastro | todo usuário tem uma pulseira |
-| `obras.csv` | obra_id, titulo, midia, generos, popularidade | gêneros separados por `\|` |
-| `avaliacoes.csv` | avaliacao_id, usuario_id, obra_id, nota (1–5), criado_em | inclui 26 semanas antes da simulação |
+| `usuarios.csv` | usuario_id, pulseira_id, data_cadastro | 1.200 usuários reais da Amazon; pulseira inventada (`PUL-…`) |
+| `obras.csv` | obra_id, titulo, midia, generos, popularidade | títulos e categorias reais; `obra_id` = `amz-` + ASIN |
+| `avaliacoes.csv` | avaliacao_id, usuario_id, obra_id, nota (1–5), criado_em | notas reais; `criado_em` no calendário 2026 |
 | `seguidores.csv` | seguidor, seguido, desde | quem segue quem e desde quando (inclui os novos) |
 | `interacoes.csv` | interacao_id, origem, destino, tipo, obra_id, avaliacao_id, criado_em | tipos: `seguir`, `abrir_perfil`, `curtir_review`, `comentar_review`, `salvar_obra` |
 

@@ -14,6 +14,9 @@ data/opinion.db*
 data/staging/
 data/processed/
 data/validacao/
+data/externo/
+mlruns/
+mlflow.db
 airflow/logs/
 airflow_home/
 
