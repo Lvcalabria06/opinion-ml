@@ -21,6 +21,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import yaml
+from sklearn.ensemble import HistGradientBoostingClassifier, RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import (average_precision_score, brier_score_loss, confusion_matrix, precision_recall_curve,
                              roc_auc_score)
@@ -99,6 +100,10 @@ def _pipeline(tipo: str, params: dict) -> Pipeline:
         return Pipeline([("escala", StandardScaler()), ("clf", clf)])
     if tipo == "arvore":
         return Pipeline([("clf", DecisionTreeClassifier(random_state=0, **params))])
+    if tipo == "random_forest":
+        return Pipeline([("clf", RandomForestClassifier(n_jobs=-1, random_state=0, **params))])
+    if tipo == "hist_gb":
+        return Pipeline([("clf", HistGradientBoostingClassifier(random_state=0, **params))])
     raise ValueError(tipo)
 
 
@@ -111,10 +116,10 @@ def _grade(d: dict) -> list[dict]:
     return out or [{}]
 
 
-def candidatos(cfg: dict) -> list[tuple[str, str, dict]]:
+def candidatos(cfg: dict, secao: dict | None = None) -> list[tuple[str, str, dict]]:
     """(nome, tipo, params) para cada ponto da grade."""
     lista = []
-    for nome, c in cfg["candidatos"].items():
+    for nome, c in (secao or cfg["candidatos"]).items():
         for p in _grade(c.get("grade") or {}):
             lista.append((nome, c["tipo"], p))
     return lista
@@ -127,7 +132,40 @@ def explicar(modelo: Pipeline, colunas: list[str], tipo: str) -> str:
         linhas = [f"intercepto {clf.intercept_[0]:+.3f}", ""]
         linhas += [f"{n:>32}  {v:+.3f}" for n, v in coef.items()]
         return "\n".join(linhas) + "\n"
-    return export_text(clf, feature_names=list(colunas), max_depth=8)
+    if tipo == "arvore":
+        return export_text(clf, feature_names=list(colunas), max_depth=8)
+    return ""   # floresta e boosting: a explicação vem da importância por permutação (opinion.modelo.comparar)
+
+
+# ======================================================================== protocolo
+def avaliar_regra(va, te, desc_va, desc_te, beta: float) -> dict:
+    """Regra simples no mesmo protocolo: limiar do compat_score escolhido na validação, entre desconhecidos."""
+    limiar, _ = escolher_limiar(va.conectou[desc_va], va.compat_score[desc_va], beta)
+    regra = {"validacao": metricas(va.conectou, va.compat_score, desc_va, probabilidade=False),
+             "teste": metricas(te.conectou, te.compat_score, desc_te, probabilidade=False), "limiar": limiar}
+    for split, df, d in (("validacao", va, desc_va), ("teste", te, desc_te)):
+        regra[split]["no_limiar_desconhecidos"] = no_limiar(df.conectou[d], df.compat_score[d], limiar, beta)
+    return regra
+
+
+def avaliar_candidato(nome, tipo, params, tr, va, cols, desc_va, beta: float) -> dict:
+    """Ajusta no treino; métricas e limiar (F-beta entre desconhecidos) na validação."""
+    m = _pipeline(tipo, params)
+    m.fit(tr[cols], tr.conectou)
+    p_va = m.predict_proba(va[cols])[:, 1]
+    t, _ = escolher_limiar(va.conectou[desc_va], p_va[desc_va], beta)
+    met_va = metricas(va.conectou, p_va, desc_va)
+    met_va["no_limiar_desconhecidos"] = no_limiar(va.conectou[desc_va], p_va[desc_va], t, beta)
+    return {"nome": nome, "tipo": tipo, "params": params, "modelo": m, "validacao": met_va, "limiar": t}
+
+
+def medir_teste(r: dict, te, cols, desc_te, beta: float):
+    """A medição única no teste — só para relatar, nada é escolhido com ela."""
+    p_te = r["modelo"].predict_proba(te[cols])[:, 1]
+    met = metricas(te.conectou, p_te, desc_te)
+    met["no_limiar_desconhecidos"] = no_limiar(te.conectou[desc_te], p_te[desc_te], r["limiar"], beta)
+    met["no_limiar_todos"] = no_limiar(te.conectou, p_te, r["limiar"], beta)
+    return p_te, met
 
 
 # ======================================================================== treino
@@ -144,26 +182,9 @@ def treinar(pasta=PASTA_PROCESSADOS, cfg=None, registrar=True) -> dict:
     desc_va, desc_te = mascara_desconhecidos(va).to_numpy(), mascara_desconhecidos(te).to_numpy()
     chave = cfg["metrica"]
 
-    # ---- regra simples: o mesmo protocolo (limiar escolhido na validação, entre desconhecidos)
-    limiar_regra, _ = escolher_limiar(va.conectou[desc_va], va.compat_score[desc_va], beta)
-    regra = {"validacao": metricas(va.conectou, va.compat_score, desc_va, probabilidade=False),
-             "teste": metricas(te.conectou, te.compat_score, desc_te, probabilidade=False), "limiar": limiar_regra}
-    regra["validacao"]["no_limiar_desconhecidos"] = no_limiar(va.conectou[desc_va], va.compat_score[desc_va],
-                                                              limiar_regra, beta)
-    regra["teste"]["no_limiar_desconhecidos"] = no_limiar(te.conectou[desc_te], te.compat_score[desc_te],
-                                                          limiar_regra, beta)
-
-    # ---- candidatos: ajuste no treino, escolha e limiar na validação
-    resultados = []
-    for nome, tipo, params in candidatos(cfg):
-        m = _pipeline(tipo, params)
-        m.fit(tr[cols], tr.conectou)
-        p_va = m.predict_proba(va[cols])[:, 1]
-        t, f = escolher_limiar(va.conectou[desc_va], p_va[desc_va], beta)
-        met_va = metricas(va.conectou, p_va, desc_va)
-        met_va["no_limiar_desconhecidos"] = no_limiar(va.conectou[desc_va], p_va[desc_va], t, beta)
-        resultados.append({"nome": nome, "tipo": tipo, "params": params, "modelo": m, "validacao": met_va,
-                           "limiar": t})
+    regra = avaliar_regra(va, te, desc_va, desc_te, beta)
+    resultados = [avaliar_candidato(nome, tipo, params, tr, va, cols, desc_va, beta)
+                  for nome, tipo, params in candidatos(cfg)]
 
     vencedor = max(resultados, key=lambda r: r["validacao"][chave] or 0)
     v, rv = vencedor["validacao"][chave], regra["validacao"][chave]
@@ -173,11 +194,7 @@ def treinar(pasta=PASTA_PROCESSADOS, cfg=None, registrar=True) -> dict:
             f"{vencedor['validacao'][chave]:.3f} x {regra['validacao'][chave]:.3f}). Baseline não se justifica."
         )
 
-    # ---- teste: uma medição, só para relatar
-    p_te = vencedor["modelo"].predict_proba(te[cols])[:, 1]
-    met_te = metricas(te.conectou, p_te, desc_te)
-    met_te["no_limiar_desconhecidos"] = no_limiar(te.conectou[desc_te], p_te[desc_te], vencedor["limiar"], beta)
-    met_te["no_limiar_todos"] = no_limiar(te.conectou, p_te, vencedor["limiar"], beta)
+    p_te, met_te = medir_teste(vencedor, te, cols, desc_te, beta)
 
     resumo = {
         "gerado_em": datetime.now().isoformat(timespec="seconds"),

@@ -50,6 +50,7 @@ python -m pytest tests -q                                           # fontes, pi
 python -m opinion.pipeline.executar --fonte arquivos                # se data/processed/ estiver vazio
 python -m opinion.modelo.treinar                                    # CC3 → MLflow
 python -m opinion.checkpoint2                                       # Checkpoint 2
+python -m opinion.modelo.comparar                                   # CC4 → MLflow + docs/comparacao_modelos.md
 ```
 
 Sem `data/reais/amazon2023/`: `python -m opinion.fontes.amazon2023 tudo` e depois `python -m opinion.gerar_bootstrap`.

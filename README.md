@@ -10,6 +10,7 @@ Este repositório acumula as entregas de CC sprint a sprint.
 | 1 | **CC1** | Pulseira virtual publicando via MQTT, serviço de ingestão, banco, dataset simulado de 12 semanas, Checkpoint 1 | `opinion/` · `docs/contrato_mqtt.md` |
 | 2 | **CC2** | Pipeline no Airflow (ingestão, compatibilidade, features, label, preparação), notebook de EDA, validação da simulação, material da sessão com o Design | `opinion/pipeline/` · `airflow/dags/` · `notebooks/` · `docs/validacao_simulacao.md` |
 | 3 | **CC3** | Usuários/obras/avaliações da Amazon Reviews 2023; baseline (Regressão Logística) no MLflow; Checkpoint 2 | `opinion/fontes/` · `opinion/modelo/` · `docs/fontes_dados.md` |
+| 4 | **CC4** | Comparação de 4 modelos no MLflow (matriz de confusão, ROC/AUC, precisão × recall) e análise crítica | `opinion/modelo/comparar.py` · `docs/comparacao_modelos.md` |
 
 Usuários, obras e avaliações são **reais** (Amazon Reviews 2023). Encontros da pulseira e o label
 ainda são simulados. Qualquer métrica mede essa mistura, não usuários reais da pulseira.
@@ -139,6 +140,20 @@ python -m opinion.checkpoint2                # Checkpoint 2
 mlflow ui --backend-store-uri sqlite:///mlflow.db   # http://localhost:5000
 ```
 
+## Sprint 4 — CC4: comparação de modelos
+
+`opinion/modelo/comparar.py` compara Regressão logística, Árvore de decisão, Random Forest e
+Gradient Boosting no mesmo protocolo do CC3 (escolha e limiar na validação, teste medido uma vez).
+Para cada modelo, um run no MLflow (experimento `opinion-cc4`) com métricas, matriz de confusão,
+curvas ROC e precisão × recall, calibração, importância por permutação e o modelo; no run pai, os
+gráficos lado a lado e o intervalo de confiança das diferenças. A análise crítica é gerada em
+[`docs/comparacao_modelos.md`](docs/comparacao_modelos.md), e o vencedor vai para
+`opinion-cc4-melhor@melhor`.
+
+```bash
+python -m opinion.modelo.comparar            # ~2 min; reescreve docs/comparacao_modelos.md
+```
+
 ---
 
 ## Como rodar
@@ -190,6 +205,9 @@ python -m opinion.validacao_simulacao            # regera docs/validacao_simulac
 # CC3 — baseline e Checkpoint 2
 python -m opinion.modelo.treinar
 python -m opinion.checkpoint2
+
+# CC4 — comparação de modelos
+python -m opinion.modelo.comparar
 ```
 
 Sem broker nem banco, o pipeline também lê direto dos arquivos: `python -m opinion.pipeline.executar --fonte arquivos`.

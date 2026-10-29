@@ -34,3 +34,42 @@ candidatos:
 limiar:
   beta: 0.5
   publico: desconhecidos
+
+# =====================================================================
+# CC4 — comparação de 3+ modelos (python -m opinion.modelo.comparar)
+# ---------------------------------------------------------------------
+# Mesmo protocolo do CC3: treino 1–8, escolha da configuração e do limiar de
+# cada família na validação, teste medido uma vez por família só para relatar.
+# Grades pequenas e fixas de propósito: otimização de hiperparâmetros é o CC5
+# (Optuna) e validação cruzada/estabilidade é o CC6.
+# =====================================================================
+comparacao:
+  experimento: opinion-cc4
+  modelo_registrado: opinion-cc4-melhor     # ponto de partida do CC5
+  alias: melhor
+  referencia: regressao_logistica           # o baseline do CC3, contra quem as diferenças são medidas
+  bootstrap: {n: 1000, semente: 0}          # intervalo de confiança das diferenças no teste
+  importancia: {repeticoes: 5, semente: 0}  # importância por permutação, na validação
+  modelos:
+    regressao_logistica:
+      tipo: logreg
+      grade:
+        C: [0.1, 1.0, 10.0]
+        class_weight: [null, balanced]
+    arvore_decisao:
+      tipo: arvore
+      grade:
+        max_depth: [4, 6, 8]
+        min_samples_leaf: [20, 50]
+    random_forest:
+      tipo: random_forest
+      grade:
+        n_estimators: [300]
+        max_depth: [8, 12]
+        min_samples_leaf: [20, 50]
+    gradient_boosting:
+      tipo: hist_gb
+      grade:
+        learning_rate: [0.05, 0.1]
+        max_leaf_nodes: [15, 31]
+        min_samples_leaf: [50]

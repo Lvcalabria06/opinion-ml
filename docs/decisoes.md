@@ -5,6 +5,18 @@ fica em cima. Decisões ainda abertas ficam em [`status.md`](status.md).
 
 ---
 
+## D-011 · 29/10/2026 · CC4: comparação no mesmo protocolo, com intervalo de confiança
+
+- **Decisão:** quatro famílias (Regressão logística, Árvore de decisão, Random Forest, Gradient
+  Boosting), cada uma com grade pequena e fixa em `config/modelo.yaml → comparacao`. Configuração,
+  limiar (F0,5) e família vencedora escolhidos na validação; teste medido uma vez por família.
+- **Incerteza:** diferenças de PR-AUC entre desconhecidos no teste com IC 95% por bootstrap pareado
+  (1.000 reamostras). Diferença cujo IC inclui zero não é apresentada como "modelo melhor".
+- **Fora do escopo de propósito:** otimização de hiperparâmetros (CC5, Optuna) e validação cruzada
+  e estabilidade (CC6). Calibração é medida (Brier, curva), mas não corrigida aqui.
+- **Registro:** o vencedor vai para `opinion-cc4-melhor@melhor`; o baseline do CC3 continua em
+  `opinion-baseline-cc3@champion`, que é o modelo do Checkpoint 2.
+
 ## D-010 · 29/10/2026 · Baseline CC3: escolha e aprovação na validação, limiar por F0,5
 
 - **Decisão:** a escolha entre Regressão Logística e Árvore de Decisão usa PR-AUC entre

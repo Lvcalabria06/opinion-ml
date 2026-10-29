@@ -11,10 +11,11 @@
 | Sprint | Requisito | Estado | Onde está |
 |---|---|---|---|
 | 1 | CC1 — dados simulados, pulseira virtual, MQTT, ingestão, Checkpoint 1 | ✅ feito | branch `main` |
-| 2 | CC2 — pipeline no Airflow, EDA, validação da simulação | 🟡 em revisão | [PR #1](https://github.com/Lvcalabria06/opinion-ml/pull/1) (branch `sprint-2-cc2`) |
-| — | Documentação de contexto, status e `AGENTS.md` | 🟡 em revisão | [PR #3](https://github.com/Lvcalabria06/opinion-ml/pull/3) (branch `docs/contexto-agentes` → `sprint-2-cc2`) |
+| 2 | CC2 — pipeline no Airflow, EDA, validação da simulação | ✅ feito (EDA ainda com números da versão 100% simulada) | branch `main` |
+| — | Documentação de contexto, status e `AGENTS.md` | ✅ feito | branch `main` |
 | — | Troca do dataset inventado por **datasets públicos reais** | ✅ feito | Amazon Reviews 2023, [`fontes_dados.md`](fontes_dados.md) · `data/reais/amazon2023/` |
-| 3 | CC3 — baseline explicável no MLflow + Checkpoint 2 | 🟡 em revisão | [PR #4](https://github.com/Lvcalabria06/opinion-ml/pull/4) (`sprint-3-cc3` → `sprint-2-cc2`) |
+| 3 | CC3 — baseline explicável no MLflow + Checkpoint 2 | ✅ feito | branch `main` · `opinion/modelo/treinar.py` · `opinion/checkpoint2.py` |
+| 4 | CC4 — comparação de 4 modelos no MLflow + análise crítica | ✅ feito | [`comparacao_modelos.md`](comparacao_modelos.md) · `opinion/modelo/comparar.py` |
 | — | Testar `docker compose up` de ponta a ponta | 🔴 a fazer | ver [Pendências](#pendências-de-infraestrutura) |
 
 Fluxo de trabalho: branches e PRs direto no repositório do Lucas (a equipe é colaboradora, sem fork).
@@ -86,7 +87,7 @@ No limiar (0,488), entre desconhecidos no teste: precisão 0,224, recall 0,237, 
 em 8,2% dos encontros (regra: precisão 0,223, recall 0,202, F0,5 0,218, sinal em 7,0%).
 **Leitura honesta:** o modelo ordena melhor que a regra (PR-AUC), mas no ponto de operação a
 precisão é praticamente a mesma; e com `balanced` as probabilidades ficam infladas (Brier pior
-que prever a prevalência). Calibração entra no CC4.
+que prever a prevalência). A calibração é analisada no CC4 (abaixo).
 
 **Checkpoint 2** (`python -m opinion.checkpoint2`): carrega o modelo do registry, confere que a
 pontuação ao vivo reproduz as features do `dataset_modelo`, monta um encontro novo no formato do
@@ -98,6 +99,25 @@ python -m opinion.modelo.treinar
 python -m opinion.checkpoint2          # CHECKPOINT 2 OK
 mlflow ui --backend-store-uri sqlite:///mlflow.db
 ```
+
+### Sprint 4 — CC4: comparação de modelos
+
+`python -m opinion.modelo.comparar` (~2 min) compara Regressão logística, Árvore de decisão,
+Random Forest e Gradient Boosting no mesmo protocolo do CC3 (D-011) e escreve a análise crítica em
+[`comparacao_modelos.md`](comparacao_modelos.md). Resultado de 29/10/2026, desconhecidos no teste:
+
+| Modelo | PR-AUC (IC 95%) | Precisão no limiar | Recall | Brier |
+|---|---|---|---|---|
+| **Gradient Boosting** (escolhido na validação) | 0,197 (0,176–0,225) | 26,0% | 24,3% | 0,101 |
+| Random Forest | 0,200 (0,177–0,227) | 27,4% | 23,1% | 0,101 |
+| Regressão logística (baseline CC3) | 0,180 (0,160–0,205) | 22,4% | 23,7% | 0,203 |
+| Árvore de decisão | 0,174 (0,154–0,197) | 24,3% | 16,8% | 0,103 |
+| Regra simples | 0,155 (0,137–0,175) | 22,3% | 20,2% | — |
+
+Gradient Boosting supera o baseline (+0,017, IC +0,002 a +0,033) e a regra (+0,043, IC +0,026 a
++0,061); Random Forest e Gradient Boosting são indistinguíveis. O vencedor está no MLflow como
+`opinion-cc4-melhor@melhor` (ponto de partida do CC5). O Checkpoint 2 continua usando o baseline
+`opinion-baseline-cc3@champion`.
 
 **Pendente:** o planejamento diz que a previsão "aparece no dashboard". O dashboard não existe;
 hoje ele seria o leitor de `previsoes.csv`. Também pendente: treino na DAG e serviço MLflow no
@@ -128,7 +148,7 @@ Docker Compose (hoje o CC3 roda só localmente).
 
 | Requisito | O que se sabe hoje |
 |---|---|
-| CC4 | escolha do modelo, apoiada em validação cruzada, explicabilidade e calibração |
-| CC6 | k-fold **agrupado por par** (`par_id`) |
+| CC5 | Optuna sobre o vencedor do CC4 (`opinion-cc4-melhor@melhor`, hoje Gradient Boosting) |
+| CC6 | k-fold **agrupado por par** (`par_id`), estabilidade, overfitting/underfitting |
 | CC7 | pontuar encontros novos (`features_encontros.parquet`) e enviar sinal pelo tópico `feedback` |
 | Semana 16 | testes do protótipo do Design com usuários reais; comparar com a simulação (seção 4 da validação) |
