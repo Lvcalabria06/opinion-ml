@@ -71,18 +71,37 @@ python -m opinion.gerar_bootstrap
 
 ### Frente B — CC3: baseline no MLflow e Checkpoint 2
 
-Regressão logística (`C=0.1`) registrada como `opinion-baseline-cc3@champion`. No teste:
+Regressão logística (`C=0.1`, `class_weight=balanced`) registrada como `opinion-baseline-cc3@champion`.
+Escolha, limiar (F0,5) e aprovação contra a regra simples na **validação**; o teste só é relatado
+(D-010). Resultado de 29/10/2026 (scikit-learn 1.9, MLflow 3.17):
 
-| | modelo | regra simples | acaso |
-|---|---|---|---|
-| PR-AUC geral | 0.251 | 0.175 | 0.128 |
-| PR-AUC desconhecidos | 0.185 | 0.155 | 0.077 |
+| | validação | teste | regra (teste) | acaso (teste) |
+|---|---|---|---|---|
+| PR-AUC geral | 0.242 | 0.250 | 0.175 | 0.128 |
+| PR-AUC desconhecidos | 0.174 | 0.180 | 0.155 | 0.077 |
+| ROC-AUC desconhecidos | 0.709 | 0.713 | 0.669 | 0.500 |
+| Brier (todos) | 0.193 | 0.203 | — | — |
+
+No limiar (0,488), entre desconhecidos no teste: precisão 0,224, recall 0,237, F0,5 0,226, sinal
+em 8,2% dos encontros (regra: precisão 0,223, recall 0,202, F0,5 0,218, sinal em 7,0%).
+**Leitura honesta:** o modelo ordena melhor que a regra (PR-AUC), mas no ponto de operação a
+precisão é praticamente a mesma; e com `balanced` as probabilidades ficam infladas (Brier pior
+que prever a prevalência). Calibração entra no CC4.
+
+**Checkpoint 2** (`python -m opinion.checkpoint2`): carrega o modelo do registry, confere que a
+pontuação ao vivo reproduz as features do `dataset_modelo`, monta um encontro novo no formato do
+contrato MQTT (IDs rotativos), passa pelo pipeline e devolve a probabilidade e o sinal (modelo e
+regra). A previsão vai para `data/processed/previsoes.csv`.
 
 ```bash
 python -m opinion.modelo.treinar
 python -m opinion.checkpoint2          # CHECKPOINT 2 OK
 mlflow ui --backend-store-uri sqlite:///mlflow.db
 ```
+
+**Pendente:** o planejamento diz que a previsão "aparece no dashboard". O dashboard não existe;
+hoje ele seria o leitor de `previsoes.csv`. Também pendente: treino na DAG e serviço MLflow no
+Docker Compose (hoje o CC3 roda só localmente).
 
 ---
 

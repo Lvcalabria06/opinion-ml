@@ -122,9 +122,16 @@ python -m opinion.gerar_bootstrap            # usa data/reais/amazon2023/ (já v
 
 ### Baseline (`opinion/modelo/treinar.py`) e Checkpoint 2
 
-Regressão Logística e Árvore de Decisão, split temporal, padronização só no treino, comparação
-com a regra simples (`compat_score`). O vencedor (PR-AUC entre desconhecidos na validação) é
-registrado no MLflow como `opinion-baseline-cc3@champion`.
+Regressão Logística e Árvore de Decisão, split temporal, padronização só no treino (dentro do
+`Pipeline`), comparação com a regra simples (`compat_score`). Escolha do modelo, limiar do sinal
+(F0,5) e aprovação contra a regra acontecem na **validação**; o teste só é relatado. O vencedor é
+registrado no MLflow como `opinion-baseline-cc3@champion`, com PR-AUC, ROC-AUC, Brier, precisão,
+recall, F0,5 e matriz de confusão, mais as curvas PR, ROC e de calibração como artefatos.
+
+O **Checkpoint 2** carrega esse modelo (sem retreinar), monta um encontro **novo** no formato do
+contrato MQTT, passa pelas funções do pipeline (`opinion/modelo/pontuar.py`) e mostra a
+probabilidade e o sinal do modelo e da regra. A previsão vai para `data/processed/previsoes.csv`
+(o dashboard ainda não existe).
 
 ```bash
 python -m opinion.modelo.treinar             # treina e registra
@@ -205,7 +212,7 @@ Siga a **Opção B** acima, nesta ordem. Cada teste prova uma parte dos requisit
 | 8 | abrir `notebooks/eda_encontros.html` | EDA e preparação dos dados com justificativas | CC2 |
 | 9 | `python -m opinion.validacao_simulacao` | premissas, sanidade e sensibilidade | CC2 |
 | 10 | abrir `data/reais/amazon2023/fonte.json` | usuários/obras/avaliações reais com fonte citada | CC3 |
-| 11 | `python -m opinion.checkpoint2` | **Checkpoint 2**: baseline no MLflow supera a regra simples | CC3 |
+| 11 | `python -m opinion.checkpoint2` | **Checkpoint 2**: um encontro novo recebe a probabilidade do baseline registrado | CC3 |
 
 ### 1. Dataset simulado
 Em `data/bootstrap/relatorio_simulacao.md`, confira: 1.200 usuários, cerca de 54,6 mil encontros e **cerca de 14% com `conectou = 1`**, além de picos de encontros nas semanas 3, 7 e 11 (convenção).
@@ -294,7 +301,7 @@ Para recomeçar do zero, pare a ingestão, apague `data/opinion.db` e repita a p
   - testes automatizados;
   - notebook executado do início ao fim;
   - validação nos 3 cenários (regerada em 22/10/2026 com os usuários reais: 16 OK, 1 atenção);
-  - baseline CC3 no MLflow e **Checkpoint 2** (PR-AUC desconhecidos 0,185 > regra 0,155).
+  - baseline CC3 no MLflow (PR-AUC desconhecidos no teste 0,180 > regra 0,155) e **Checkpoint 2** (29/10/2026).
 - **Não testado:** `docker compose` (com PostgreSQL e o container do Airflow), porque o ambiente onde isso foi escrito não tinha Docker. Rodem uma vez antes de apresentar.
 
 ## Estrutura
@@ -308,6 +315,7 @@ opinion/                            CC1: simulador, pulseira virtual, ingestão 
 opinion/fontes/                     CC3: download e filtro dos datasets públicos
 opinion/pipeline/                   CC2: etapas do pipeline (usadas pela DAG)
 opinion/modelo/                     CC3: baseline + registro no MLflow
+opinion/modelo/pontuar.py           CC3: pontuação de encontro novo (usada pelo Checkpoint 2)
 opinion/checkpoint2.py              CC3: Checkpoint 2
 docs/fontes_dados.md                citação, o que é real, o que é transformação
 data/reais/amazon2023/              amostra filtrada (versionada)

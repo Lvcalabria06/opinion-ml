@@ -5,13 +5,20 @@ fica em cima. Decisões ainda abertas ficam em [`status.md`](status.md).
 
 ---
 
-## D-010 · 22/10/2026 · Baseline CC3: PR-AUC em desconhecidos, F1 só para o limiar
+## D-010 · 29/10/2026 · Baseline CC3: escolha e aprovação na validação, limiar por F0,5
 
 - **Decisão:** a escolha entre Regressão Logística e Árvore de Decisão usa PR-AUC entre
-  desconhecidos na validação. O limiar de decisão maximiza F1 no mesmo público. A métrica
-  final (custo do sinal errado) continua aberta com o Design.
-- **Consequência:** o Checkpoint 2 exige que o modelo registrado no MLflow supere a regra
-  simples (`compat_score`) em PR-AUC de desconhecidos no teste.
+  desconhecidos na validação, e é **na validação** que se exige superar a regra simples
+  (`compat_score`). O limiar do sinal maximiza **F0,5** (precisão pesa o dobro do recall:
+  sinal errado cansa o usuário) entre desconhecidos da validação. A regra simples recebe
+  o mesmo protocolo: o limiar dela também é escolhido na validação.
+- **Por quê:** aprovar no teste e rodar de novo até passar transforma o teste em validação.
+  O teste agora só é relatado; nenhuma escolha usa ele.
+- **Métricas registradas:** PR-AUC e ROC-AUC (todos e desconhecidos), Brier, e no limiar
+  precisão, recall, F0,5, taxa de sinal e matriz de confusão; curvas PR, ROC, calibração e
+  matriz de confusão como artefatos no MLflow.
+- **Checkpoint 2:** carrega o modelo do registry (não retreina) e pontua um encontro
+  **novo** no formato do contrato MQTT, passando pelas mesmas funções do pipeline.
 
 ## D-009 · 22/10/2026 · Um dataset unificado: Amazon Reviews 2023
 

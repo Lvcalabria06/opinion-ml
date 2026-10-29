@@ -2,8 +2,9 @@
 CC3 — baseline explicável (Regressão Logística ou Árvore de Decisão).
 
 Lê data/processed/dataset_modelo.parquet (saída do CC2). Treina no split temporal
-"treino", escolhe o candidato e o limiar no "validacao", mede uma vez no "teste".
-Compara com a regra simples (compat_score). O vencedor vai para o MLflow.
+"treino", escolhe o candidato e o limiar no "validacao" e só ali decide se o modelo
+supera a regra simples (compat_score). O "teste" é medido no fim, só para relatar:
+nada é escolhido nem aprovado com ele. O vencedor vai para o MLflow.
 
     python -m opinion.modelo.treinar
     python -m opinion.modelo.treinar --sem-registro     # só avalia, não grava no MLflow
@@ -21,7 +22,8 @@ import numpy as np
 import pandas as pd
 import yaml
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import average_precision_score, f1_score, roc_auc_score
+from sklearn.metrics import (average_precision_score, brier_score_loss, confusion_matrix, precision_recall_curve,
+                             roc_auc_score)
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 from sklearn.tree import DecisionTreeClassifier, export_text
@@ -44,31 +46,53 @@ def mascara_desconhecidos(df: pd.DataFrame) -> pd.Series:
     return df.algum_segue == 0
 
 
-def metricas(y, p, desc) -> dict:
-    y, p, desc = np.asarray(y), np.asarray(p), np.asarray(desc, dtype=bool)
+# ======================================================================== métricas
+def metricas(y, p, desc, probabilidade: bool = True) -> dict:
+    """Métricas de ranking e, se p é probabilidade, de calibração (não dependem do limiar)."""
+    y, p, desc = np.asarray(y), np.asarray(p, dtype=float), np.asarray(desc, dtype=bool)
     out = {
         "pr_auc": float(average_precision_score(y, p)),
         "pr_auc_desconhecidos": float(average_precision_score(y[desc], p[desc])) if desc.any() else None,
         "roc_auc": float(roc_auc_score(y, p)),
+        "roc_auc_desconhecidos": float(roc_auc_score(y[desc], p[desc])) if desc.any() else None,
         "prevalencia": float(y.mean()),
         "prevalencia_desconhecidos": float(y[desc].mean()) if desc.any() else None,
         "n": int(len(y)),
         "n_desconhecidos": int(desc.sum()),
     }
+    if probabilidade:   # o compat_score da regra é uma pontuação, não probabilidade: Brier não se aplica
+        out["brier"] = float(brier_score_loss(y, p))
+        out["brier_desconhecidos"] = float(brier_score_loss(y[desc], p[desc])) if desc.any() else None
     return out
 
 
-def limiar_f1(y, p) -> tuple[float, float]:
-    """Limiar em [0.05, 0.95] que maximiza F1. Empate: o menor limiar."""
-    y, p = np.asarray(y), np.asarray(p)
-    melhor, t_melhor = -1.0, 0.5
-    for t in np.linspace(0.05, 0.95, 19):
-        f = f1_score(y, p >= t, zero_division=0)
-        if f > melhor:
-            melhor, t_melhor = f, float(t)
-    return t_melhor, float(melhor)
+def fbeta(precisao, recall, beta: float):
+    b2 = beta ** 2
+    with np.errstate(invalid="ignore", divide="ignore"):
+        f = (1 + b2) * precisao * recall / (b2 * precisao + recall)
+    return np.nan_to_num(f)
 
 
+def no_limiar(y, p, t: float, beta: float) -> dict:
+    """O que acontece quando a pulseira sinaliza p >= t: matriz de confusão e derivadas."""
+    y, sinal = np.asarray(y), np.asarray(p) >= t
+    vn, fp, fn, vp = (int(v) for v in confusion_matrix(y, sinal, labels=[0, 1]).ravel())
+    precisao = vp / (vp + fp) if vp + fp else 0.0
+    recall = vp / (vp + fn) if vp + fn else 0.0
+    return {"limiar": float(t), "precisao": precisao, "recall": recall,
+            f"f{beta:g}".replace(".", ""): float(fbeta(np.array(precisao), np.array(recall), beta)),
+            "taxa_sinal": float(sinal.mean()), "vp": vp, "fp": fp, "fn": fn, "vn": vn}
+
+
+def escolher_limiar(y, p, beta: float) -> tuple[float, float]:
+    """Limiar que maximiza F-beta (beta < 1 pesa mais a precisão: sinal errado cansa o usuário)."""
+    precisao, recall, limiares = precision_recall_curve(np.asarray(y), np.asarray(p))
+    f = fbeta(precisao[:-1], recall[:-1], beta)
+    i = int(np.argmax(f))
+    return float(limiares[i]), float(f[i])
+
+
+# ======================================================================== candidatos
 def _pipeline(tipo: str, params: dict) -> Pipeline:
     if tipo == "logreg":
         clf = LogisticRegression(max_iter=3000, solver="lbfgs", random_state=0, **params)
@@ -106,37 +130,54 @@ def explicar(modelo: Pipeline, colunas: list[str], tipo: str) -> str:
     return export_text(clf, feature_names=list(colunas), max_depth=8)
 
 
+# ======================================================================== treino
 def treinar(pasta=PASTA_PROCESSADOS, cfg=None, registrar=True) -> dict:
     cfg = cfg or config()
+    beta = float(cfg["limiar"]["beta"])
+    nome_f = f"f{beta:g}".replace(".", "")
     dm, meta = carregar(pasta)
     cols = meta["colunas_features"]
     tr, va, te = (dm[dm.split == s].copy() for s in ("treino", "validacao", "teste"))
     for nome, parte in (("treino", tr), ("validacao", va), ("teste", te)):
         if parte.empty:
             raise ValueError(f"split {nome} vazio")
-
-    regra_va = metricas(va.conectou, va.compat_score, mascara_desconhecidos(va))
-    regra_te = metricas(te.conectou, te.compat_score, mascara_desconhecidos(te))
+    desc_va, desc_te = mascara_desconhecidos(va).to_numpy(), mascara_desconhecidos(te).to_numpy()
     chave = cfg["metrica"]
 
+    # ---- regra simples: o mesmo protocolo (limiar escolhido na validação, entre desconhecidos)
+    limiar_regra, _ = escolher_limiar(va.conectou[desc_va], va.compat_score[desc_va], beta)
+    regra = {"validacao": metricas(va.conectou, va.compat_score, desc_va, probabilidade=False),
+             "teste": metricas(te.conectou, te.compat_score, desc_te, probabilidade=False), "limiar": limiar_regra}
+    regra["validacao"]["no_limiar_desconhecidos"] = no_limiar(va.conectou[desc_va], va.compat_score[desc_va],
+                                                              limiar_regra, beta)
+    regra["teste"]["no_limiar_desconhecidos"] = no_limiar(te.conectou[desc_te], te.compat_score[desc_te],
+                                                          limiar_regra, beta)
+
+    # ---- candidatos: ajuste no treino, escolha e limiar na validação
     resultados = []
     for nome, tipo, params in candidatos(cfg):
         m = _pipeline(tipo, params)
         m.fit(tr[cols], tr.conectou)
         p_va = m.predict_proba(va[cols])[:, 1]
-        met_va = metricas(va.conectou, p_va, mascara_desconhecidos(va))
-        desc_va = mascara_desconhecidos(va)
-        t, f1 = limiar_f1(va.conectou[desc_va], p_va[desc_va.to_numpy()])
-        resultados.append({"nome": nome, "tipo": tipo, "params": params, "modelo": m,
-                           "validacao": met_va, "limiar": t, "f1_validacao_desconhecidos": f1})
+        t, f = escolher_limiar(va.conectou[desc_va], p_va[desc_va], beta)
+        met_va = metricas(va.conectou, p_va, desc_va)
+        met_va["no_limiar_desconhecidos"] = no_limiar(va.conectou[desc_va], p_va[desc_va], t, beta)
+        resultados.append({"nome": nome, "tipo": tipo, "params": params, "modelo": m, "validacao": met_va,
+                           "limiar": t})
 
     vencedor = max(resultados, key=lambda r: r["validacao"][chave] or 0)
+    v, rv = vencedor["validacao"][chave], regra["validacao"][chave]
+    if not (v > rv and not np.isclose(v, rv)):          # empate (ou diferença de arredondamento) não conta
+        raise RuntimeError(
+            f"o melhor candidato NÃO superou a regra simples na validação ({chave}: "
+            f"{vencedor['validacao'][chave]:.3f} x {regra['validacao'][chave]:.3f}). Baseline não se justifica."
+        )
+
+    # ---- teste: uma medição, só para relatar
     p_te = vencedor["modelo"].predict_proba(te[cols])[:, 1]
-    met_te = metricas(te.conectou, p_te, mascara_desconhecidos(te))
-    desc_te = mascara_desconhecidos(te)
-    pred = p_te >= vencedor["limiar"]
-    met_te["f1_desconhecidos"] = float(f1_score(te.conectou[desc_te], pred[desc_te.to_numpy()], zero_division=0))
-    texto = explicar(vencedor["modelo"], cols, vencedor["tipo"])
+    met_te = metricas(te.conectou, p_te, desc_te)
+    met_te["no_limiar_desconhecidos"] = no_limiar(te.conectou[desc_te], p_te[desc_te], vencedor["limiar"], beta)
+    met_te["no_limiar_todos"] = no_limiar(te.conectou, p_te, vencedor["limiar"], beta)
 
     resumo = {
         "gerado_em": datetime.now().isoformat(timespec="seconds"),
@@ -144,57 +185,121 @@ def treinar(pasta=PASTA_PROCESSADOS, cfg=None, registrar=True) -> dict:
         "tipo": vencedor["tipo"],
         "params": vencedor["params"],
         "limiar": vencedor["limiar"],
+        "criterio_limiar": f"max {nome_f} entre desconhecidos na validação",
         "features": cols,
         "n_features": len(cols),
-        "regra_simples": {"validacao": regra_va, "teste": regra_te},
-        "vencedor": {"validacao": vencedor["validacao"], "teste": met_te,
-                     "f1_validacao_desconhecidos": vencedor["f1_validacao_desconhecidos"]},
-        "todos_candidatos": [{"nome": r["nome"], "params": r["params"], "validacao": r["validacao"]}
-                             for r in resultados],
-        "supera_regra_teste": met_te[chave] > regra_te[chave],
-        "supera_regra_teste_geral": met_te["pr_auc"] > regra_te["pr_auc"],
-        "explicacao": texto,
+        "regra_simples": regra,
+        "vencedor": {"validacao": vencedor["validacao"], "teste": met_te},
+        "todos_candidatos": [{"nome": r["nome"], "params": r["params"], "limiar": r["limiar"],
+                              "validacao": r["validacao"]} for r in resultados],
+        "supera_regra_validacao": True,
+        "supera_regra_teste": met_te[chave] > regra["teste"][chave],
+        "supera_regra_teste_geral": met_te["pr_auc"] > regra["teste"]["pr_auc"],
+        "explicacao": explicar(vencedor["modelo"], cols, vencedor["tipo"]),
         "dataset": {"por_split": meta.get("por_split"), "taxa_conexao": meta.get("taxa_conexao")},
+        "_modelo": vencedor["modelo"],
     }
-    if not resumo["supera_regra_teste"]:
-        raise RuntimeError(
-            f"o baseline NÃO superou a regra simples no teste ({chave}: "
-            f"{met_te[chave]:.3f} x {regra_te[chave]:.3f}). Checkpoint 2 falhou."
-        )
-
     if registrar:
-        resumo.update(_registrar(vencedor["modelo"], resumo, pasta, cfg))
+        preds = {"y": te.conectou.to_numpy(), "p": p_te, "regra": te.compat_score.to_numpy(), "desc": desc_te}
+        resumo.update(_registrar(vencedor["modelo"], resumo, preds, pasta, cfg))
     return resumo
 
 
-def _registrar(modelo, resumo: dict, pasta: Path, cfg: dict) -> dict:
+# ======================================================================== gráficos
+def _graficos(preds: dict, limiar: float, limiar_regra: float) -> dict:
+    """Figuras do teste: curvas PR e ROC (modelo x regra), calibração e matriz de confusão."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    from sklearn.calibration import calibration_curve
+    from sklearn.metrics import roc_curve
+
+    y, p, r, d = preds["y"], preds["p"], preds["regra"], preds["desc"]
+    grupos = [("todos", np.ones_like(d, dtype=bool)), ("desconhecidos", d)]
+    figs = {}
+
+    fig, axs = plt.subplots(1, 2, figsize=(10, 4.2))
+    for ax, (nome, m) in zip(axs, grupos):
+        for rot, s in (("modelo", p), ("regra simples", r)):
+            pr, rc, _ = precision_recall_curve(y[m], s[m])
+            ax.plot(rc, pr, label=f"{rot} (PR-AUC {average_precision_score(y[m], s[m]):.3f})")
+        ax.axhline(y[m].mean(), ls="--", c="gray", label=f"acaso ({y[m].mean():.3f})")
+        ax.set(title=f"Curva PR — teste, {nome}", xlabel="recall", ylabel="precisão", ylim=(0, 1))
+        ax.legend(fontsize=8)
+    figs["graficos/curvas_pr.png"] = fig
+
+    fig, axs = plt.subplots(1, 2, figsize=(10, 4.2))
+    for ax, (nome, m) in zip(axs, grupos):
+        for rot, s in (("modelo", p), ("regra simples", r)):
+            fpr, tpr, _ = roc_curve(y[m], s[m])
+            ax.plot(fpr, tpr, label=f"{rot} (ROC-AUC {roc_auc_score(y[m], s[m]):.3f})")
+        ax.plot([0, 1], [0, 1], ls="--", c="gray")
+        ax.set(title=f"Curva ROC — teste, {nome}", xlabel="taxa de falso positivo", ylabel="recall")
+        ax.legend(fontsize=8)
+    figs["graficos/curvas_roc.png"] = fig
+
+    fig, ax = plt.subplots(figsize=(5, 4.2))
+    for nome, m in grupos:
+        fp_, mp_ = calibration_curve(y[m], p[m], n_bins=10, strategy="quantile")
+        ax.plot(mp_, fp_, marker="o", label=f"{nome} (Brier {brier_score_loss(y[m], p[m]):.3f})")
+    ax.plot([0, 1], [0, 1], ls="--", c="gray", label="calibração perfeita")
+    ax.set(title="Calibração — teste", xlabel="probabilidade prevista", ylabel="taxa real de conexão")
+    ax.legend(fontsize=8)
+    figs["graficos/calibracao.png"] = fig
+
+    fig, axs = plt.subplots(1, 2, figsize=(9, 4))
+    for ax, (rot, s, t) in zip(axs, (("modelo", p, limiar), ("regra simples", r, limiar_regra))):
+        cm = confusion_matrix(y[d], s[d] >= t, labels=[0, 1])
+        ax.imshow(cm, cmap="Blues")
+        for (i, j), v in np.ndenumerate(cm):
+            ax.text(j, i, f"{v:,}", ha="center", va="center", color="black")
+        ax.set(title=f"{rot} — desconhecidos, limiar {t:.3f}", xticks=[0, 1], yticks=[0, 1],
+               xticklabels=["sem sinal", "sinal"], yticklabels=["não conectou", "conectou"])
+    figs["graficos/matriz_confusao_desconhecidos.png"] = fig
+    return figs
+
+
+def _metricas_planas(prefixo: str, bloco: dict) -> dict:
+    out = {}
+    for k, v in bloco.items():
+        if isinstance(v, dict):
+            out.update(_metricas_planas(f"{prefixo}_{k}", v))
+        elif isinstance(v, (int, float)) and not isinstance(v, bool) and v is not None:
+            out[f"{prefixo}_{k}"] = v
+    return out
+
+
+def _registrar(modelo, resumo: dict, preds: dict, pasta: Path, cfg: dict) -> dict:
+    import matplotlib.pyplot as plt
     import mlflow
     import mlflow.sklearn
     from mlflow.models import infer_signature
     from mlflow.tracking import MlflowClient
 
     os.environ.setdefault("MLFLOW_DISABLE_AGENT_HINT", "1")
-    uri = cfg["mlflow"]["tracking_uri"]
-    mlflow.set_tracking_uri(uri)
+    mlflow.set_tracking_uri(cfg["mlflow"]["tracking_uri"])
     mlflow.set_experiment(cfg["mlflow"]["experimento"])
     dm, meta = carregar(pasta)
-    cols = meta["colunas_features"]
-    exemplo = dm[dm.split == "treino"][cols].head(5)
+    exemplo = dm[dm.split == "treino"][meta["colunas_features"]].head(5)
+    regra = resumo["regra_simples"]
 
     with mlflow.start_run(run_name=f"{resumo['algoritmo']}-{resumo['tipo']}") as run:
         mlflow.log_params({"algoritmo": resumo["algoritmo"], "tipo": resumo["tipo"],
-                           "limiar": resumo["limiar"], **{f"hp_{k}": v for k, v in resumo["params"].items()}})
-        for split, bloco in (("validacao", resumo["vencedor"]["validacao"]),
-                             ("teste", resumo["vencedor"]["teste"])):
-            mlflow.log_metrics({f"{split}_{k}": v for k, v in bloco.items() if isinstance(v, (int, float))})
-        mlflow.log_metrics({
-            "teste_regra_pr_auc": resumo["regra_simples"]["teste"]["pr_auc"],
-            "teste_regra_pr_auc_desconhecidos": resumo["regra_simples"]["teste"]["pr_auc_desconhecidos"],
-            "delta_pr_auc_desconhecidos": (resumo["vencedor"]["teste"]["pr_auc_desconhecidos"]
-                                           - resumo["regra_simples"]["teste"]["pr_auc_desconhecidos"]),
-        })
-        mlflow.log_dict({k: v for k, v in resumo.items() if k != "explicacao"}, "resumo.json")
+                           "limiar": resumo["limiar"], "limiar_regra": regra["limiar"],
+                           "beta_limiar": cfg["limiar"]["beta"], "metrica_escolha": cfg["metrica"],
+                           "n_features": resumo["n_features"],
+                           **{f"hp_{k}": v for k, v in resumo["params"].items()}})
+        for split in ("validacao", "teste"):
+            mlflow.log_metrics(_metricas_planas(split, resumo["vencedor"][split]))
+            mlflow.log_metrics(_metricas_planas(f"{split}_regra", regra[split]))
+        mlflow.log_metric("delta_pr_auc_desconhecidos_teste",
+                          resumo["vencedor"]["teste"]["pr_auc_desconhecidos"] - regra["teste"]["pr_auc_desconhecidos"])
+        mlflow.log_dict({k: v for k, v in resumo.items() if k != "explicacao" and not k.startswith("_")},
+                        "resumo.json")
         mlflow.log_text(resumo["explicacao"], "explicacao.txt")
+        for caminho, fig in _graficos(preds, resumo["limiar"], regra["limiar"]).items():
+            mlflow.log_figure(fig, caminho)
+            plt.close(fig)
         assinatura = infer_signature(exemplo, modelo.predict_proba(exemplo)[:, 1])
         info = mlflow.sklearn.log_model(
             sk_model=modelo,
@@ -213,13 +318,26 @@ def _registrar(modelo, resumo: dict, pasta: Path, cfg: dict) -> dict:
 
 
 def _imprimir(r: dict) -> None:
-    te, regra = r["vencedor"]["teste"], r["regra_simples"]["teste"]
-    print(f"Algoritmo: {r['algoritmo']} {r['params']}  limiar={r['limiar']:.2f}")
-    print(f"{'':22} {'modelo':>8} {'regra':>8} {'acaso':>8}")
-    print(f"{'PR-AUC geral':22} {te['pr_auc']:8.3f} {regra['pr_auc']:8.3f} {te['prevalencia']:8.3f}")
-    print(f"{'PR-AUC desconhecidos':22} {te['pr_auc_desconhecidos']:8.3f} "
-          f"{regra['pr_auc_desconhecidos']:8.3f} {te['prevalencia_desconhecidos']:8.3f}")
-    print("Supera a regra (desconhecidos, teste):", "sim" if r["supera_regra_teste"] else "NÃO")
+    va, te, regra = r["vencedor"]["validacao"], r["vencedor"]["teste"], r["regra_simples"]
+    print(f"Algoritmo: {r['algoritmo']} {r['params']}  limiar={r['limiar']:.3f}  ({r['criterio_limiar']})")
+    print(f"{'':28} {'validação':>10} {'teste':>8} {'regra(te)':>10} {'acaso(te)':>10}")
+    print(f"{'PR-AUC geral':28} {va['pr_auc']:10.3f} {te['pr_auc']:8.3f} {regra['teste']['pr_auc']:10.3f} "
+          f"{te['prevalencia']:10.3f}")
+    print(f"{'PR-AUC desconhecidos':28} {va['pr_auc_desconhecidos']:10.3f} {te['pr_auc_desconhecidos']:8.3f} "
+          f"{regra['teste']['pr_auc_desconhecidos']:10.3f} {te['prevalencia_desconhecidos']:10.3f}")
+    print(f"{'ROC-AUC desconhecidos':28} {va['roc_auc_desconhecidos']:10.3f} {te['roc_auc_desconhecidos']:8.3f} "
+          f"{regra['teste']['roc_auc_desconhecidos']:10.3f} {0.5:10.3f}")
+    print(f"{'Brier (todos)':28} {va['brier']:10.3f} {te['brier']:8.3f}")
+    nl, nr = te["no_limiar_desconhecidos"], regra["teste"]["no_limiar_desconhecidos"]
+    f = next(k for k in nl if k.startswith("f") and k[1:].isdigit())
+    print(f"No limiar, desconhecidos (teste):  modelo  precisão {nl['precisao']:.3f}  recall {nl['recall']:.3f}  "
+          f"{f} {nl[f]:.3f}  sinal em {nl['taxa_sinal']:.1%}")
+    print(f"{'':35}regra   precisão {nr['precisao']:.3f}  recall {nr['recall']:.3f}  "
+          f"{f} {nr[f]:.3f}  sinal em {nr['taxa_sinal']:.1%}")
+    print(f"Matriz de confusão do modelo (desconhecidos, teste): VP {nl['vp']}  FP {nl['fp']}  "
+          f"FN {nl['fn']}  VN {nl['vn']}")
+    print("Supera a regra na validação (critério):", "sim" if r["supera_regra_validacao"] else "NÃO",
+          "| no teste (só relato):", "sim" if r["supera_regra_teste"] else "NÃO")
     if r.get("mlflow_run_id"):
         print(f"MLflow: {r['mlflow_modelo']} v{r['mlflow_versao']} @{r['mlflow_alias']}  run {r['mlflow_run_id']}")
 
