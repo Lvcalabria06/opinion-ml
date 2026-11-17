@@ -1,7 +1,7 @@
 """
 Pipeline de dados do OpiniOn (CC2).
 
-Etapas (cada uma vira uma task da DAG do Airflow em airflow/dags/opinion_pipeline.py):
+Etapas (cada uma vira uma task da DAG do Airflow em dags/opinion_pipeline.py):
 
   1. ingestao       extrai do banco operacional (o que a ingestão MQTT gravou + histórico do app)
                     para uma área de staging, com checagens de consistência

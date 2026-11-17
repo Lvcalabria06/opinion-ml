@@ -5,6 +5,19 @@ fica em cima. Decisões ainda abertas ficam em [`status.md`](status.md).
 
 ---
 
+## D-012 · 17/11/2026 · Estrutura do repositório conforme o item 6 da especificação
+
+- **Decisão:** o pacote `opinion` vai para `src/opinion/` (instalável por `pyproject.toml`, e o
+  `pip install -r requirements-analise.txt` já o instala); a pulseira virtual vai para `embedded/`
+  (`python -m embedded.pulseira_virtual`); a DAG para `dags/`; o MLflow (banco e artefatos) para
+  `mlruns/`; `api/`, `app/` e `reports/` criadas com README até o CC7, o CC9 e o relatório.
+- **Por que separar a pulseira:** quem corrige encontra o "simulador do sistema embarcado" na pasta que
+  a especificação nomeia. O contrato MQTT (`src/opinion/contrato.py`) fica em `src/` porque a ingestão
+  do backend também o usa.
+- **Mantidas como ajuste permitido:** `config/`, `docs/`, `tests/`, `infra/`.
+- **Raiz do projeto:** `OPINION_HOME`, ou duas pastas acima de `src/opinion/`. No Docker, o pacote roda
+  sem instalar (`PYTHONPATH=/app/src`, `OPINION_HOME=/app`).
+
 ## D-011 · 29/10/2026 · CC4: comparação no mesmo protocolo, com intervalo de confiança
 
 - **Decisão:** quatro famílias (Regressão logística, Árvore de decisão, Random Forest, Gradient

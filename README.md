@@ -1,5 +1,10 @@
 # OpiniOn — Ciência da Computação (Machine Learning)
 
+> **A preencher pela equipe** (exigido pelo item 6 da especificação):
+> - **Nome da solução:** _a definir_
+> - **Membros:** _Nome Sobrenome (@usuario-github), …_
+> - **Google Sites do projeto:** _link_
+
 **Pergunta do modelo (seção 3.4):** dado que dois usuários acabaram de se encontrar, qual a chance de eles
 interagirem no OpiniOn nas próximas 48 horas?
 
@@ -7,10 +12,10 @@ Este repositório acumula as entregas de CC sprint a sprint.
 
 | Sprint | Requisito | O que foi entregue | Onde |
 |---|---|---|---|
-| 1 | **CC1** | Pulseira virtual publicando via MQTT, serviço de ingestão, banco, dataset simulado de 12 semanas, Checkpoint 1 | `opinion/` · `docs/contrato_mqtt.md` |
-| 2 | **CC2** | Pipeline no Airflow (ingestão, compatibilidade, features, label, preparação), notebook de EDA, validação da simulação, material da sessão com o Design | `opinion/pipeline/` · `airflow/dags/` · `notebooks/` · `docs/validacao_simulacao.md` |
-| 3 | **CC3** | Usuários/obras/avaliações da Amazon Reviews 2023; baseline (Regressão Logística) no MLflow; Checkpoint 2 | `opinion/fontes/` · `opinion/modelo/` · `docs/fontes_dados.md` |
-| 4 | **CC4** | Comparação de 4 modelos no MLflow (matriz de confusão, ROC/AUC, precisão × recall) e análise crítica | `opinion/modelo/comparar.py` · `docs/comparacao_modelos.md` |
+| 1 | **CC1** | Pulseira virtual publicando via MQTT, serviço de ingestão, banco, dataset simulado de 12 semanas, Checkpoint 1 | `src/opinion/` · `docs/contrato_mqtt.md` |
+| 2 | **CC2** | Pipeline no Airflow (ingestão, compatibilidade, features, label, preparação), notebook de EDA, validação da simulação, material da sessão com o Design | `src/opinion/pipeline/` · `dags/` · `notebooks/` · `docs/validacao_simulacao.md` |
+| 3 | **CC3** | Usuários/obras/avaliações da Amazon Reviews 2023; baseline (Regressão Logística) no MLflow; Checkpoint 2 | `src/opinion/fontes/` · `src/opinion/modelo/` · `docs/fontes_dados.md` |
+| 4 | **CC4** | Comparação de 4 modelos no MLflow (matriz de confusão, ROC/AUC, precisão × recall) e análise crítica | `src/opinion/modelo/comparar.py` · `docs/comparacao_modelos.md` |
 
 Usuários, obras e avaliações são **reais** (Amazon Reviews 2023). Encontros da pulseira e o label
 ainda são simulados. Qualquer métrica mede essa mistura, não usuários reais da pulseira.
@@ -37,22 +42,22 @@ ainda são simulados. Qualquer métrica mede essa mistura, não usuários reais 
 
 ## Sprint 1 — CC1: dados e caminho até o banco
 
-- **`opinion/gerar_bootstrap.py`:** simula 1.200 usuários em 12 semanas (06/07 a 27/09/2026), indo a cinema, livraria, campus e a uma convenção de games (semanas 3, 7 e 11). Gera 54.586 encontros, 42.846 interações no app, 60.787 avaliações, 6.658 toques de interesse e 2.396 trocas de modo. As premissas ficam em `config/simulacao.yaml`.
-- **`opinion/pulseira_virtual.py`:** publica encontros, toques e status no contrato MQTT da seção 4.2, com IDs anônimos que mudam todo dia. Tem dois modos: `replay` (as 12 semanas) e `ao-vivo`.
-- **`opinion/ingestao.py`:** recebe as mensagens, valida, traduz os IDs, confere o dono da pulseira e grava no banco.
-- **`opinion/checkpoint1.py`:** teste do Checkpoint 1 (encontro publicado → broker → banco → consulta).
+- **`src/opinion/gerar_bootstrap.py`:** simula 1.200 usuários em 12 semanas (06/07 a 27/09/2026), indo a cinema, livraria, campus e a uma convenção de games (semanas 3, 7 e 11). Gera 54.586 encontros, 42.846 interações no app, 60.787 avaliações, 6.658 toques de interesse e 2.396 trocas de modo. As premissas ficam em `config/simulacao.yaml`.
+- **`embedded/pulseira_virtual.py`:** publica encontros, toques e status no contrato MQTT da seção 4.2, com IDs anônimos que mudam todo dia. Tem dois modos: `replay` (as 12 semanas) e `ao-vivo`.
+- **`src/opinion/ingestao.py`:** recebe as mensagens, valida, traduz os IDs, confere o dono da pulseira e grava no banco.
+- **`src/opinion/checkpoint1.py`:** teste do Checkpoint 1 (encontro publicado → broker → banco → consulta).
 
 ## Sprint 2 — CC2: pipeline, EDA e validação
 
-### Pipeline no Airflow (`airflow/dags/opinion_pipeline.py`)
+### Pipeline no Airflow (`dags/opinion_pipeline.py`)
 
 | Task | O que faz | Código |
 |---|---|---|
-| `ingestao` | Lê do banco (o que o MQTT gravou + histórico do app) e grava uma "foto" em `data/staging/`. Para se faltar dado ou houver inconsistência. | `opinion/pipeline/ingestao.py` |
-| `compatibilidade` | Similaridade de gosto entre os dois: gêneros, notas nas mesmas obras, favoritas em comum. **Só com avaliações anteriores ao encontro.** | `opinion/pipeline/compatibilidade.py` |
-| `features` | Encontro (duração, RSSI, encontros anteriores do par), contexto (local, dia, hora, modo), perfil (atividade, conexões) e relação (já se seguem, já interagiram). **Tudo até o instante do encontro.** | `opinion/pipeline/features.py` |
-| `label` | `conectou = 1` se houve interação entre os dois em até 48 h após o fim. Encontros com menos de 48 h ficam "aguardando". | `opinion/pipeline/label.py` |
-| `preparacao` | Split temporal (semanas 1–8 / 9–10 / 11–12), purga da fronteira, imputação, one-hot e checagens de qualidade. Grava o dataset do modelo. | `opinion/pipeline/preparacao.py` |
+| `ingestao` | Lê do banco (o que o MQTT gravou + histórico do app) e grava uma "foto" em `data/staging/`. Para se faltar dado ou houver inconsistência. | `src/opinion/pipeline/ingestao.py` |
+| `compatibilidade` | Similaridade de gosto entre os dois: gêneros, notas nas mesmas obras, favoritas em comum. **Só com avaliações anteriores ao encontro.** | `src/opinion/pipeline/compatibilidade.py` |
+| `features` | Encontro (duração, RSSI, encontros anteriores do par), contexto (local, dia, hora, modo), perfil (atividade, conexões) e relação (já se seguem, já interagiram). **Tudo até o instante do encontro.** | `src/opinion/pipeline/features.py` |
+| `label` | `conectou = 1` se houve interação entre os dois em até 48 h após o fim. Encontros com menos de 48 h ficam "aguardando". | `src/opinion/pipeline/label.py` |
+| `preparacao` | Split temporal (semanas 1–8 / 9–10 / 11–12), purga da fronteira, imputação, one-hot e checagens de qualidade. Grava o dataset do modelo. | `src/opinion/pipeline/preparacao.py` |
 | `resumo` | Registra no log o tamanho e a taxa de conexão de cada split. | — |
 
 As tasks `compatibilidade`, `features` e `label` rodam em paralelo. A DAG roda diariamente e também pode ser disparada na mão.
@@ -110,7 +115,7 @@ Os achados para a sessão estão nas seções 3 a 8 e 10 do notebook (e numa apr
 
 ## Sprint 3 — CC3: dados reais e baseline no MLflow
 
-### Dados reais (`opinion/fontes/amazon2023.py`)
+### Dados reais (`src/opinion/fontes/amazon2023.py`)
 
 Usuários, obras e avaliações vêm da [Amazon Reviews 2023](https://amazon-reviews-2023.github.io/)
 (McAuley Lab, UCSD): os mesmos usuários reais avaliando livro, filme/série, jogo e música.
@@ -121,7 +126,7 @@ python -m opinion.fontes.amazon2023 tudo     # uma vez (baixa os brutos para dat
 python -m opinion.gerar_bootstrap            # usa data/reais/amazon2023/ (já versionado)
 ```
 
-### Baseline (`opinion/modelo/treinar.py`) e Checkpoint 2
+### Baseline (`src/opinion/modelo/treinar.py`) e Checkpoint 2
 
 Regressão Logística e Árvore de Decisão, split temporal, padronização só no treino (dentro do
 `Pipeline`), comparação com a regra simples (`compat_score`). Escolha do modelo, limiar do sinal
@@ -130,19 +135,19 @@ registrado no MLflow como `opinion-baseline-cc3@champion`, com PR-AUC, ROC-AUC, 
 recall, F0,5 e matriz de confusão, mais as curvas PR, ROC e de calibração como artefatos.
 
 O **Checkpoint 2** carrega esse modelo (sem retreinar), monta um encontro **novo** no formato do
-contrato MQTT, passa pelas funções do pipeline (`opinion/modelo/pontuar.py`) e mostra a
+contrato MQTT, passa pelas funções do pipeline (`src/opinion/modelo/pontuar.py`) e mostra a
 probabilidade e o sinal do modelo e da regra. A previsão vai para `data/processed/previsoes.csv`
 (o dashboard ainda não existe).
 
 ```bash
 python -m opinion.modelo.treinar             # treina e registra
 python -m opinion.checkpoint2                # Checkpoint 2
-mlflow ui --backend-store-uri sqlite:///mlflow.db   # http://localhost:5000
+mlflow ui --backend-store-uri sqlite:///mlruns/mlflow.db   # http://localhost:5000
 ```
 
 ## Sprint 4 — CC4: comparação de modelos
 
-`opinion/modelo/comparar.py` compara Regressão logística, Árvore de decisão, Random Forest e
+`src/opinion/modelo/comparar.py` compara Regressão logística, Árvore de decisão, Random Forest e
 Gradient Boosting no mesmo protocolo do CC3 (escolha e limiar na validação, teste medido uma vez).
 Para cada modelo, um run no MLflow (experimento `opinion-cc4`) com métricas, matriz de confusão,
 curvas ROC e precisão × recall, calibração, importância por permutação e o modelo; no run pai, os
@@ -181,6 +186,12 @@ No **Linux**, coloque o seu `id -u` em `AIRFLOW_UID` no `.env`, para o Airflow c
 
 ### Opção B — Python local (o caminho testado)
 
+**Já tinha o projeto antes da reorganização das pastas (D-012)?** Rode uma vez, da raiz, antes de
+treinar: `pip install -r requirements-analise.txt` (agora instala o pacote de `src/`) e
+`mv mlflow.db mlruns/` (o MLflow passou a guardar o banco em `mlruns/`; sem isso os modelos já
+registrados somem). Se sobrarem na raiz as pastas antigas `opinion` ou `airflow` só com cache
+(`__pycache__`, logs), pode apagá-las.
+
 ```bash
 pip install -r requirements-analise.txt
 cp .env.example .env                             # configuração local (uma vez)
@@ -190,13 +201,13 @@ docker run -p 1883:1883 eclipse-mosquitto:2 mosquitto -c /mosquitto-no-auth.conf
 # CC1 — dados chegando pelo MQTT
 python -m opinion.carregar_historico_app
 python -m opinion.ingestao                       # terminal 2 (fica aberto)
-python -m opinion.pulseira_virtual replay        # terminal 3 (~2 min)
+python -m embedded.pulseira_virtual replay        # terminal 3 (~2 min)
 python -m opinion.verificar_replay
 python -m opinion.checkpoint1
 
 # CC2 — pipeline (escolha um)
 python -m opinion.pipeline.executar              # mesmas etapas da DAG, sem Airflow
-airflow dags test opinion_pipeline               # com Airflow instalado (AIRFLOW__CORE__DAGS_FOLDER=airflow/dags)
+airflow dags test opinion_pipeline               # com Airflow instalado (AIRFLOW__CORE__DAGS_FOLDER=dags)
 
 python -m pytest tests -q                        # testes (inclui o de vazamento)
 jupyter notebook notebooks/eda_encontros.ipynb   # EDA
@@ -221,10 +232,10 @@ Siga a **Opção B** acima, nesta ordem. Cada teste prova uma parte dos requisit
 | # | Comando | Prova | Requisito |
 |---|---|---|---|
 | 1 | abrir `data/bootstrap/relatorio_simulacao.md` | o dataset de 12 semanas existe e é plausível | CC1 |
-| 2 | `python -m opinion.pulseira_virtual replay` | a pulseira publica via MQTT e a ingestão grava | CC1 |
+| 2 | `python -m embedded.pulseira_virtual replay` | a pulseira publica via MQTT e a ingestão grava | CC1 |
 | 3 | `python -m opinion.verificar_replay` | nenhuma mensagem perdida; IDs anônimos resolvidos certo | CC1 |
 | 4 | `python -m opinion.checkpoint1` | **Checkpoint 1**: encontro → broker → banco → consulta | CC1 |
-| 5 | `python -m opinion.pulseira_virtual ao-vivo --duracao-min 1 --duplicar 0.05 --invalidas 0.05` e depois `python -m opinion.consultar` | a ingestão ignora repetidas e rejeita defeituosas, com o motivo | CC1 |
+| 5 | `python -m embedded.pulseira_virtual ao-vivo --duracao-min 1 --duplicar 0.05 --invalidas 0.05` e depois `python -m opinion.consultar` | a ingestão ignora repetidas e rejeita defeituosas, com o motivo | CC1 |
 | 6 | `python -m opinion.pipeline.executar` (ou a DAG no Airflow) | o pipeline gera o dataset do modelo | CC2 |
 | 7 | `python -m pytest tests -q` | sem informação do futuro; label e janela de 48 h corretos | CC2 |
 | 8 | abrir `notebooks/eda_encontros.html` | EDA e preparação dos dados com justificativas | CC2 |
@@ -322,24 +333,43 @@ Para recomeçar do zero, pare a ingestão, apague `data/opinion.db` e repita a p
   - baseline CC3 no MLflow (PR-AUC desconhecidos no teste 0,180 > regra 0,155) e **Checkpoint 2** (29/10/2026).
 - **Não testado:** `docker compose` (com PostgreSQL e o container do Airflow), porque o ambiente onde isso foi escrito não tinha Docker. Rodem uma vez antes de apresentar.
 
-## Estrutura
+## Estrutura do repositório
+
+Segue o item 6 da especificação do projeto. As pastas extras (`config/`, `docs/`, `tests/`, `infra/`)
+são ajustes permitidos pelo próprio item 6.
 
 ```
-config/simulacao.yaml               premissas do simulador (usuarios.fonte = amazon2023)
-config/fontes.yaml                  mapeamento Amazon → mídia/gênero do OpiniOn
-config/pipeline.yaml                label, split temporal, janelas e checagens do pipeline
-config/modelo.yaml                  candidatos do baseline, métrica, MLflow
-opinion/                            CC1: simulador, pulseira virtual, ingestão MQTT, banco, checkpoint
-opinion/fontes/                     CC3: download e filtro dos datasets públicos
-opinion/pipeline/                   CC2: etapas do pipeline (usadas pela DAG)
-opinion/modelo/                     CC3: baseline + registro no MLflow
-opinion/modelo/pontuar.py           CC3: pontuação de encontro novo (usada pelo Checkpoint 2)
-opinion/checkpoint2.py              CC3: Checkpoint 2
-docs/fontes_dados.md                citação, o que é real, o que é transformação
-data/reais/amazon2023/              amostra filtrada (versionada)
-data/bootstrap/                     encontros simulados sobre os usuários reais
-tests/                              pipeline, fontes, baseline
+/
+├── data/                  dados: bootstrap simulado (data/bootstrap/), amostra Amazon (data/reais/);
+│                          staging/ e processed/ são gerados e ficam fora do Git
+├── notebooks/             EDA do bootstrap e das etapas de preparação
+├── src/opinion/           código de treinamento, pipeline e backend (pacote Python `opinion`)
+│   ├── pipeline/          CC2: etapas do pipeline (as mesmas funções que a DAG chama)
+│   ├── modelo/            CC3/CC4: baseline, comparação de modelos, pontuação de encontro novo
+│   ├── fontes/            CC3: download e filtro da Amazon Reviews 2023
+│   ├── gerar_bootstrap.py simulador do mundo (encontros, seguidores, interações, label)
+│   ├── ingestao.py        recebe o MQTT, valida, traduz os IDs e grava no banco
+│   └── checkpoint1.py, checkpoint2.py
+├── embedded/              simulador do sistema embarcado: a pulseira virtual (MQTT)
+├── dags/                  DAG do Apache Airflow (opinion_pipeline)
+├── api/                   API de inferência (CC7, ainda não implementada)
+├── app/                   dashboard (CC9, ainda não implementado)
+├── mlruns/                MLflow: mlflow.db e artefatos (fora do Git, só o README é versionado)
+├── reports/               relatório em PDF no template SBC
+├── config/                parâmetros em YAML: simulação, fontes, pipeline, modelos
+├── docs/                  contexto, decisões, status, dicionário de dados, comparação de modelos
+├── tests/                 testes automáticos (pytest)
+├── infra/                 Mosquitto e Dockerfile do Airflow
+├── Dockerfile             imagem dos serviços Python (ingestão, carga, pulseira)
+├── docker-compose.yml     a solução inteira com um comando
+├── pyproject.toml         torna o pacote de src/ instalável (pip install -e .)
+├── requirements.txt       dependências dos serviços
+├── requirements-analise.txt  dependências de análise e treino (inclui o pacote)
+└── README.md
 ```
+
+Os comandos `python -m opinion.…` rodam da raiz depois de `pip install -r requirements-analise.txt`,
+que instala o pacote de `src/` em modo editável. A pulseira roda com `python -m embedded.pulseira_virtual`.
 
 ## Pendências
 

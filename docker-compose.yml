@@ -73,14 +73,14 @@ services:
   pulseira-replay:
     <<: *app
     # espera a ingestão assinar os tópicos antes de publicar
-    command: sh -c "sleep 8 && python -m opinion.pulseira_virtual replay"
+    command: sh -c "sleep 8 && python -m embedded.pulseira_virtual replay"
     depends_on:
       ingestao: {condition: service_started}
     restart: "no"
 
   pulseira-ao-vivo:
     <<: *app
-    command: python -m opinion.pulseira_virtual ao-vivo --por-minuto ${ENCONTROS_POR_MINUTO:-20}
+    command: python -m embedded.pulseira_virtual ao-vivo --por-minuto ${ENCONTROS_POR_MINUTO:-20}
     depends_on:
       pulseira-replay: {condition: service_completed_successfully}
     restart: unless-stopped
@@ -88,7 +88,7 @@ services:
   airflow:
     build:
       context: .
-      dockerfile: airflow/Dockerfile
+      dockerfile: infra/airflow/Dockerfile
     command: airflow standalone
     # Linux: ajuste AIRFLOW_UID no .env (rode: id -u) para o Airflow poder escrever em ./data
     user: "${AIRFLOW_UID:-50000}:0"
@@ -98,16 +98,16 @@ services:
       OPINION_DATA_DIR: /opt/opinion/data
       OPINION_FONTE: banco
       OPINION_SEGREDO_TOKEN: ${OPINION_SEGREDO_TOKEN:?crie o arquivo .env com cp .env.example .env}
-      PYTHONPATH: /opt/opinion
-      AIRFLOW__CORE__DAGS_FOLDER: /opt/opinion/airflow/dags
+      PYTHONPATH: /opt/opinion/src
+      AIRFLOW__CORE__DAGS_FOLDER: /opt/opinion/dags
       AIRFLOW__CORE__LOAD_EXAMPLES: "False"
       AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_ALL_ADMINS: "True"   # sem login — só para desenvolvimento
       AIRFLOW__API__PORT: "8080"
     ports: ["8080:8080"]
     volumes:
-      - ./opinion:/opt/opinion/opinion:ro
+      - ./src:/opt/opinion/src:ro
       - ./config:/opt/opinion/config:ro
-      - ./airflow/dags:/opt/opinion/airflow/dags:ro
+      - ./dags:/opt/opinion/dags:ro
       - ./data:/opt/opinion/data
     depends_on:
       pulseira-replay: {condition: service_completed_successfully}

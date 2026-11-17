@@ -50,7 +50,7 @@ têm gênero reconhecido.
 | mídia (`livro`/`filme`/`serie`/`jogo`/`musica`) | mapeamento nosso, regras em `config/fontes.yaml` |
 | gêneros do OpiniOn | mapeamento das categorias Amazon → lista em `config/fontes.yaml` |
 | calendário 2026 | deslocamento de **semanas inteiras** (261 semanas: 2021-07-05 → 2026-07-06). Dia da semana, hora e a ordem entre as pessoas são os reais |
-| encontros, seguidores, interações, label | **ainda simulados** (`opinion/gerar_bootstrap.py`) |
+| encontros, seguidores, interações, label | **ainda simulados** (`src/opinion/gerar_bootstrap.py`) |
 
 ### Janela
 

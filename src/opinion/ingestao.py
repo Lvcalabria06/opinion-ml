@@ -3,7 +3,7 @@ Serviço de ingestão (CC1): recebe as mensagens da pulseira pelo MQTT e grava n
 
 Para cada mensagem em opinion/pulseira/+/encontro | interesse | status:
   1. guarda a mensagem bruta em `mqtt_mensagens` (auditoria, inclusive as rejeitadas)
-  2. valida contra o contrato (opinion/contrato.py)
+  2. valida contra o contrato (src/opinion/contrato.py)
   3. traduz os IDs anônimos e rotativos para o usuário real
   4. confere se a pulseira que publicou pertence mesmo ao usuário informado
   5. grava em `encontros`, `interesses` ou `status_pulseira`

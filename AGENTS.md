@@ -37,7 +37,7 @@ métricas melhorem.
 - Código, nomes, mensagens, docs e commits em **português** (sem acento em identificadores:
   `encontros`, `conectou`, `compat_score`).
 - Premissas e parâmetros ficam em YAML em `config/`, nunca fixos no código.
-- Cada etapa do pipeline é uma função em `opinion/pipeline/` chamada tanto pela DAG quanto por
+- Cada etapa do pipeline é uma função em `src/opinion/pipeline/` chamada tanto pela DAG quanto por
   `python -m opinion.pipeline.executar`; mantenha as duas formas funcionando.
 - Gerados não vão para o Git: `data/staging/`, `data/processed/`, `data/opinion.db`, `.env` (ver `.gitignore`).
 - Commits por entrega, no formato `Sprint N (CCN): resumo` ou `README: resumo`.

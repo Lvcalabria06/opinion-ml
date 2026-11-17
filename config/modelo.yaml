@@ -6,7 +6,7 @@
 # =====================================================================
 
 mlflow:
-  tracking_uri: sqlite:///mlflow.db
+  tracking_uri: sqlite:///mlruns/mlflow.db   # banco do MLflow junto dos artefatos, em mlruns/
   experimento: opinion-cc3
   modelo_registrado: opinion-baseline-cc3
   alias: champion

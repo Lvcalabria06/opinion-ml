@@ -5,12 +5,14 @@ pulseira virtual no modo ao vivo.
 from __future__ import annotations
 
 import math
+import os
 from pathlib import Path
 
 import numpy as np
 import yaml
 
-RAIZ = Path(__file__).resolve().parent.parent
+# raiz do repositório (src/opinion/mundo.py -> ../..); OPINION_HOME vale quando o pacote roda fora dela (Docker)
+RAIZ = Path(os.getenv("OPINION_HOME") or Path(__file__).resolve().parents[2])
 CONFIG_PADRAO = RAIZ / "config" / "simulacao.yaml"
 PASTA_BOOTSTRAP = RAIZ / "data" / "bootstrap"
 

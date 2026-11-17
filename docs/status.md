@@ -4,7 +4,7 @@
 > (feita, em revisão, bloqueada) ou quando uma decisão for tomada. Decisões com justificativa
 > vão também para [`decisoes.md`](decisoes.md).
 
-Última atualização: **22/10/2026** · Sprint atual: **Sprint 3 (CC3), semana S12 do cronograma**
+Última atualização: **17/11/2026** · Sprint atual: **Sprint 5 (CC5), semana S14 do cronograma**
 
 ## Resumo em uma tela
 
@@ -14,9 +14,11 @@
 | 2 | CC2 — pipeline no Airflow, EDA, validação da simulação | ✅ feito (EDA ainda com números da versão 100% simulada) | branch `main` |
 | — | Documentação de contexto, status e `AGENTS.md` | ✅ feito | branch `main` |
 | — | Troca do dataset inventado por **datasets públicos reais** | ✅ feito | Amazon Reviews 2023, [`fontes_dados.md`](fontes_dados.md) · `data/reais/amazon2023/` |
-| 3 | CC3 — baseline explicável no MLflow + Checkpoint 2 | ✅ feito | branch `main` · `opinion/modelo/treinar.py` · `opinion/checkpoint2.py` |
-| 4 | CC4 — comparação de 4 modelos no MLflow + análise crítica | ✅ feito | [`comparacao_modelos.md`](comparacao_modelos.md) · `opinion/modelo/comparar.py` |
-| — | Testar `docker compose up` de ponta a ponta | 🔴 a fazer | ver [Pendências](#pendências-de-infraestrutura) |
+| 3 | CC3 — baseline explicável no MLflow + Checkpoint 2 | ✅ feito | branch `main` · `src/opinion/modelo/treinar.py` · `src/opinion/checkpoint2.py` |
+| 4 | CC4 — comparação de 4 modelos no MLflow + análise crítica | ✅ feito | [`comparacao_modelos.md`](comparacao_modelos.md) · `src/opinion/modelo/comparar.py` |
+| — | Estrutura de pastas conforme o item 6 da especificação (D-012) | ✅ feito | `src/`, `embedded/`, `dags/`, `api/`, `app/`, `mlruns/`, `reports/` |
+| — | README com nome da solução, membros (@github) e link do Google Sites | 🔴 a fazer | topo do [README](../README.md) |
+| — | Testar `docker compose build` e `up` de ponta a ponta (depois da reorganização) | 🔴 a fazer | ver [Pendências](#pendências-de-infraestrutura) |
 
 Fluxo de trabalho: branches e PRs direto no repositório do Lucas (a equipe é colaboradora, sem fork).
 Enquanto o PR #1 não entrar na `main`, PRs que dependem da Sprint 2 apontam para `sprint-2-cc2`.
@@ -30,18 +32,18 @@ Quem começa agora: leia [`contexto.md`](contexto.md) (10 min), depois este arqu
 
 ### Sprint 1 — CC1 (na `main`)
 
-- **Simulador** (`opinion/gerar_bootstrap.py`, premissas em `config/simulacao.yaml`): 1.200 usuários,
+- **Simulador** (`src/opinion/gerar_bootstrap.py`, premissas em `config/simulacao.yaml`): 1.200 usuários,
   12 semanas (06/07 a 27/09/2026), cinema, livraria, campus e convenção de games (semanas 3, 7 e 11).
   Cerca de 54,6 mil encontros, ~14% com `conectou = 1`.
-- **Pulseira virtual** (`opinion/pulseira_virtual.py`): publica encontros, toques e status por MQTT no
+- **Pulseira virtual** (`embedded/pulseira_virtual.py`): publica encontros, toques e status por MQTT no
   [contrato](contrato_mqtt.md) combinado com o Design. IDs anônimos que mudam todo dia (HMAC).
-- **Ingestão** (`opinion/ingestao.py`): valida, traduz IDs, confere o dono da pulseira, grava no banco,
+- **Ingestão** (`src/opinion/ingestao.py`): valida, traduz IDs, confere o dono da pulseira, grava no banco,
   rejeita mensagens com defeito (com motivo) e ignora repetidas.
-- **Checkpoint 1** (`opinion/checkpoint1.py`): encontro → broker → banco → consulta.
+- **Checkpoint 1** (`src/opinion/checkpoint1.py`): encontro → broker → banco → consulta.
 
 ### Sprint 2 — CC2 (no PR #1, aguardando aprovação)
 
-- **Pipeline no Airflow** (`airflow/dags/opinion_pipeline.py` + `opinion/pipeline/`): ingestão →
+- **Pipeline no Airflow** (`dags/opinion_pipeline.py` + `src/opinion/pipeline/`): ingestão →
   compatibilidade / features / label (em paralelo) → preparação → resumo. Saída em
   `data/processed/dataset_modelo.parquet` (33 features, `conectou`, `split`, `par_id`).
 - **Split temporal:** treino semanas 1–8, validação 9–10, teste 11–12, com purga da fronteira.
@@ -97,7 +99,7 @@ regra). A previsão vai para `data/processed/previsoes.csv`.
 ```bash
 python -m opinion.modelo.treinar
 python -m opinion.checkpoint2          # CHECKPOINT 2 OK
-mlflow ui --backend-store-uri sqlite:///mlflow.db
+mlflow ui --backend-store-uri sqlite:///mlruns/mlflow.db
 ```
 
 ### Sprint 4 — CC4: comparação de modelos

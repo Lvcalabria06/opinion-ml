@@ -1,6 +1,6 @@
 # Contrato de mensagens MQTT — pulseira OpiniOn (v1)
 
-Implementa a seção 4.2 do documento do projeto. Código: `opinion/contrato.py`.
+Implementa a seção 4.2 do documento do projeto. Código: `src/opinion/contrato.py`.
 Artefato compartilhado com o Design: o protótipo físico deve publicar exatamente estas mensagens.
 
 | Tópico | Direção | QoS | Quando |

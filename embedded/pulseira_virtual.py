@@ -1,6 +1,6 @@
 """
 Pulseira virtual do OpiniOn — publica encontros, toques de interesse e status via MQTT,
-seguindo o contrato da seção 4.2 (opinion/contrato.py).
+seguindo o contrato da seção 4.2 (src/opinion/contrato.py).
 
 A equipe de CC trabalha com a pulseira virtual do Sprint 1 ao SR2; o protótipo físico
 é do Design e, quando conectado, usa o mesmo contrato.
@@ -15,9 +15,9 @@ Para simplificar, um único cliente MQTT publica em nome de todas as pulseiras
 virtuais (cada uma no seu próprio tópico opinion/pulseira/{id}/...).
 Também escuta opinion/pulseira/+/feedback e mostra os sinais recebidos (CC7 em diante).
 
-    python -m opinion.pulseira_virtual replay                 # ~500 mensagens/s (≈ 2 min)
-    python -m opinion.pulseira_virtual replay --velocidade 3600   # 1 h simulada por segundo
-    python -m opinion.pulseira_virtual ao-vivo --por-minuto 30
+    python -m embedded.pulseira_virtual replay                 # ~500 mensagens/s (≈ 2 min)
+    python -m embedded.pulseira_virtual replay --velocidade 3600   # 1 h simulada por segundo
+    python -m embedded.pulseira_virtual ao-vivo --por-minuto 30
 """
 from __future__ import annotations
 

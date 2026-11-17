@@ -1,0 +1,19 @@
+# Pacote `opinion` (código de treinamento, pipeline e backend) em src/.
+# As dependências ficam em requirements.txt / requirements-analise.txt; este arquivo só torna o
+# pacote instalável (pip install -e .), para `python -m opinion...` funcionar da raiz.
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "opinion"
+version = "0.4.0"
+description = "OpiniOn — modelo de conexão entre usuários que se encontram (trilha de Machine Learning)"
+requires-python = ">=3.12"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src", "."]
+testpaths = ["tests"]

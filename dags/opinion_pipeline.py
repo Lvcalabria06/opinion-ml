@@ -24,10 +24,10 @@ import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 
-# permite importar o pacote `opinion` quando a pasta do projeto não está no PYTHONPATH
-RAIZ_PROJETO = Path(os.getenv("OPINION_HOME", Path(__file__).resolve().parents[2]))
-if str(RAIZ_PROJETO) not in sys.path:
-    sys.path.insert(0, str(RAIZ_PROJETO))
+# permite importar o pacote `opinion` (em src/) quando ele não está instalado nem no PYTHONPATH
+RAIZ_PROJETO = Path(os.getenv("OPINION_HOME") or Path(__file__).resolve().parents[1])
+if str(RAIZ_PROJETO / "src") not in sys.path:
+    sys.path.insert(0, str(RAIZ_PROJETO / "src"))
 
 try:                                    # Airflow 3
     from airflow.sdk import dag, task

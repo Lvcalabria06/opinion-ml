@@ -47,11 +47,11 @@ usuários reais da pulseira.** Detalhes em [`fontes_dados.md`](fontes_dados.md).
 
 | Camada | Código | Documento |
 |---|---|---|
-| Simulador e premissas | `opinion/gerar_bootstrap.py`, `opinion/mundo.py`, `config/simulacao.yaml` | [`validacao_simulacao.md`](validacao_simulacao.md) |
-| Contrato da pulseira | `opinion/contrato.py`, `opinion/pulseira_virtual.py` | [`contrato_mqtt.md`](contrato_mqtt.md) |
-| Ingestão e banco | `opinion/ingestao.py`, `opinion/db.py`, `opinion/carregar_historico_app.py` | [`contrato_mqtt.md`](contrato_mqtt.md) |
-| Pipeline (CC2) | `opinion/pipeline/`, `airflow/dags/opinion_pipeline.py`, `config/pipeline.yaml` | [`dicionario_dados.md`](dicionario_dados.md) |
-| Análise | `notebooks/eda_encontros.ipynb`, `opinion/validacao_simulacao.py` | [`validacao_simulacao.md`](validacao_simulacao.md) |
+| Simulador e premissas | `src/opinion/gerar_bootstrap.py`, `src/opinion/mundo.py`, `config/simulacao.yaml` | [`validacao_simulacao.md`](validacao_simulacao.md) |
+| Contrato da pulseira | `src/opinion/contrato.py`, `embedded/pulseira_virtual.py` | [`contrato_mqtt.md`](contrato_mqtt.md) |
+| Ingestão e banco | `src/opinion/ingestao.py`, `src/opinion/db.py`, `src/opinion/carregar_historico_app.py` | [`contrato_mqtt.md`](contrato_mqtt.md) |
+| Pipeline (CC2) | `src/opinion/pipeline/`, `dags/opinion_pipeline.py`, `config/pipeline.yaml` | [`dicionario_dados.md`](dicionario_dados.md) |
+| Análise | `notebooks/eda_encontros.ipynb`, `src/opinion/validacao_simulacao.py` | [`validacao_simulacao.md`](validacao_simulacao.md) |
 
 ## Requisitos por sprint
 

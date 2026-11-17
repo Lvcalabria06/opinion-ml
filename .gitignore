@@ -15,11 +15,18 @@ data/staging/
 data/processed/
 data/validacao/
 data/externo/
-mlruns/
+mlruns/*
+!mlruns/README.md
+# legado: local antigo do banco do MLflow (antes de D-012); mova para mlruns/
 mlflow.db
+# gerados por pip install -e . (requirements-analise.txt)
+*.egg-info/
+build/
 airflow/logs/
 airflow_home/
 
 # sistema
 .DS_Store
 Thumbs.db
+.claude/worktrees/
+.superpowers/
