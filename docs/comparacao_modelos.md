@@ -1,5 +1,9 @@
 # Comparação de modelos — OpiniOn (CC4)
 
+**Experimento histórico.** Este relatório foi gerado antes da regeneração do bootstrap com a
+regra de aviso por categoria. Seus números e figuras não descrevem os dados atuais.
+Consulte [os resultados por mídia](match_por_midia.md) para a versão em uso.
+
 Gerado por `python -m opinion.modelo.comparar` em 18/11/2026 23:19. Números do teste medidos **uma vez** por modelo; nada foi escolhido com eles.
 
 > Usuários, obras e notas são reais (Amazon Reviews 2023); encontros e o label `conectou` são simulados ([`fontes_dados.md`](fontes_dados.md)). As métricas medem quão bem cada modelo recupera o processo da simulação, não o comportamento de usuários reais da pulseira.
@@ -30,7 +34,8 @@ Gerado por `python -m opinion.modelo.comparar` em 18/11/2026 23:19. Números do 
 
 ## 3. No ponto de operação (desconhecidos, teste)
 
-O que a pulseira faria: sinaliza quando a pontuação passa do limiar escolhido na validação.
+Esta seção avalia uma política de sinal da rodada histórica. O protótipo atual avisa por
+categoria na proximidade, conforme o corte fixado em `config/pipeline.yaml`.
 
 | Modelo | Limiar | Precisão | Recall | F0,5 | Sinal em | VP | FP | FN | VN |
 |---|---|---|---|---|---|---|---|---|---|

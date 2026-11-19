@@ -1,17 +1,16 @@
 # AGENTS.md — OpiniOn (trilha de Machine Learning)
 
 Modelo que responde: **dois usuários acabaram de se encontrar; qual a chance de interagirem no app em
-até 48 h?** A resposta decide se a pulseira do OpiniOn dá um sinal. Projeto acadêmico entregue em
-sprints (requisitos CC1, CC2, CC3…). Os dados são simulados (não há usuários reais nem pulseira) e
-Usuários, obras e avaliações vêm da Amazon Reviews 2023; encontros e o label ainda são simulados.
+até 48 h?** A pulseira sinaliza a afinidade alta por mídia ao detectar proximidade. A previsão de 48 h é calculada separadamente após o encontro. Projeto acadêmico entregue em
+sprints (requisitos CC1, CC2, CC3…). Usuários, obras e avaliações vêm da Amazon Reviews 2023; encontros e interações no app
+ainda são simulados. A pulseira usada aqui é virtual.
 
 ## Antes de começar qualquer tarefa
 
 1. Leia [`docs/status.md`](docs/status.md): o que está feito, em revisão e o que falta (frentes A e B).
 2. Se o projeto for novo para você, leia [`docs/contexto.md`](docs/contexto.md) (produto, pergunta,
    fluxo dos dados, glossário).
-3. Confira a branch. A Sprint 2 ainda está no PR #1 (`sprint-2-cc2`); trabalho que depende dela parte
-   dessa branch, não da `main`.
+3. Confira a branch e o estado do Git antes de editar.
 
 ## Regras do projeto (invariantes)
 
@@ -21,26 +20,27 @@ métricas melhorem.
 - **Só o passado:** toda feature de um encontro usa apenas dados de antes do `inicio` dele. Feature
   nova precisa passar em `tests/test_pipeline.py::test_sem_vazamento_do_futuro`.
 - **Split temporal:** treino semanas 1–8, validação 9–10, teste 11–12 (`config/pipeline.yaml`), com
-  purga da fronteira. Validação cruzada é agrupada por `par_id`. O teste é medido uma vez, no fim.
+  purga da fronteira. Quando houver validação cruzada, agrupe por `par_id`. O teste é medido uma vez, no fim.
 - **Padronização dentro do pipeline do modelo**, ajustada só no treino. `dataset_modelo.parquet` sai
   sem padronização de propósito.
 - **Verdade da simulação fica fora do modelo:** nada de `data/bootstrap/verdade_simulacao_NAO_USAR_COMO_FEATURE/`
   vira feature, nem indiretamente. Serve só para validar.
-- **Resultado sempre comparado:** reporte PR-AUC geral e só entre desconhecidos (`algum_segue == 0`),
-  ao lado da prevalência e da regra simples (`compat_score`).
+- **Resultado sempre comparado:** em cada recorte por mídia, reporte PR-AUC geral e só entre desconhecidos (`algum_segue == 0`),
+  ao lado da prevalência e da regra simples do recorte (`compat_score_<midia>`).
+- **Aviso por categoria:** a regra usa somente o histórico anterior ao início do encontro e o corte de cada mídia. A estimativa do modelo usa dados disponíveis ao fim.
 - **Honestidade sobre os dados:** métricas medem a simulação. "Melhor algoritmo" e ranking de features
   não são descobertas (ver [`docs/validacao_simulacao.md`](docs/validacao_simulacao.md)).
 - **Dados externos têm fonte:** todo dataset público usado é citado (origem, licença, filtro aplicado).
 
 ## Convenções
 
-- Código, nomes, mensagens, docs e commits em **português** (sem acento em identificadores:
+- Código, nomes, mensagens e docs em **português**; mensagens de commit em inglês conforme o histórico recente (sem acento em identificadores:
   `encontros`, `conectou`, `compat_score`).
 - Premissas e parâmetros ficam em YAML em `config/`, nunca fixos no código.
 - Cada etapa do pipeline é uma função em `src/opinion/pipeline/` chamada tanto pela DAG quanto por
   `python -m opinion.pipeline.executar`; mantenha as duas formas funcionando.
 - Gerados não vão para o Git: `data/staging/`, `data/processed/`, `data/opinion.db`, `.env` (ver `.gitignore`).
-- Commits por entrega, no formato `Sprint N (CCN): resumo` ou `README: resumo`.
+- Commits por entrega, no formato de prefixo curto seguido de resumo em inglês, como `CC4: add category-based affinity alerts`.
 
 ## Verificar o trabalho
 
@@ -48,9 +48,8 @@ métricas melhorem.
 pip install -r requirements-analise.txt && cp .env.example .env    # uma vez
 python -m pytest tests -q                                           # fontes, pipeline, baseline
 python -m opinion.pipeline.executar --fonte arquivos                # se data/processed/ estiver vazio
-python -m opinion.modelo.treinar                                    # CC3 → MLflow
-python -m opinion.checkpoint2                                       # Checkpoint 2
-python -m opinion.modelo.comparar                                   # CC4 → MLflow + docs/comparacao_modelos.md
+python -m opinion.modelo.comparar --midia musica                   # CC4 por mídia → MLflow
+python -m opinion.checkpoint2 --usuarios usr-00694 usr-01029     # aviso musical e estimativa
 ```
 
 Sem `data/reais/amazon2023/`: `python -m opinion.fontes.amazon2023 tudo` e depois `python -m opinion.gerar_bootstrap`.

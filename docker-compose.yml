@@ -6,7 +6,7 @@
 #   mosquitto        broker MQTT ............................ localhost:1883
 #   postgres         banco de dados ......................... localhost:5432 (credenciais do .env)
 #   carga            gera o bootstrap (se ainda não existir) e carrega o histórico do app
-#   ingestao         recebe encontros/interesses/status via MQTT e grava no banco
+#   ingestao         recebe proximidade/encontros/interesses/status e envia feedback
 #   pulseira-replay  publica as 12 semanas do bootstrap via MQTT (roda uma vez, ~2 min)
 #   pulseira-ao-vivo continua gerando encontros novos em tempo real
 #   airflow          pipeline de dados (CC2) ................ http://localhost:8080 (sem login em desenvolvimento)

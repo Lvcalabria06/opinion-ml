@@ -7,8 +7,9 @@ Tudo o que o MLflow grava fica aqui:
 
 | Experimento | Gerado por | Conteúdo |
 |---|---|---|
-| `opinion-cc3` | `python -m opinion.modelo.treinar` | baseline (`opinion-baseline-cc3@champion`) |
-| `opinion-cc4` | `python -m opinion.modelo.comparar` | comparação de 4 modelos (`opinion-cc4-melhor@melhor`) |
+| `opinion-cc3-aviso-categoria` | `python -m opinion.modelo.treinar` | baseline geral opcional (`opinion-baseline-cc3-aviso-categoria@champion`) |
+| `opinion-cc4-aviso-categoria-<midia>` | `python -m opinion.modelo.comparar --midia <midia>` | quatro famílias no recorte da mídia; vencedor em `opinion-cc4-aviso-categoria-<midia>@melhor` |
+| `opinion-cc4-aviso-categoria` | `python -m opinion.modelo.comparar` | comparação geral acadêmica, separada dos recortes |
 
 O conteúdo **não vai para o Git** (são arquivos binários e grandes, e cada pessoa gera os seus
 rodando os comandos acima). Só este README é versionado. O endereço do banco está em

@@ -338,7 +338,7 @@ def escrever_doc(r: dict, com_figuras: bool) -> str:
               "![Curvas ROC](img/cc4/curvas_roc.png)", ""]
 
     L += ["## 3. No ponto de operação (desconhecidos, teste)", "",
-          "O que a pulseira faria: sinaliza quando a pontuação passa do limiar escolhido na validação.", "",
+          "O limiar do modelo é uma avaliação acadêmica. O aviso do protótipo usa o corte por categoria na proximidade.", "",
           "| Modelo | Limiar | Precisão | Recall | F0,5 | Sinal em | VP | FP | FN | VN |",
           "|---|---|---|---|---|---|---|---|---|---|"]
     for k in ordem + ["regra"]:

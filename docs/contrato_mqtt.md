@@ -1,7 +1,7 @@
 # Contrato de mensagens MQTT — pulseira OpiniOn (v1)
 
 Implementa a seção 4.2 do documento do projeto. Código: `src/opinion/contrato.py`.
-Artefato compartilhado com o Design: o protótipo físico deve publicar exatamente estas mensagens.
+O protótipo atual implementa este contrato. A integração com a pulseira física depende da equipe de Design.
 
 | Tópico | Direção | QoS | Quando |
 |---|---|---|---|
@@ -67,7 +67,7 @@ O toque é dado secundário: vai para a EDA, mas não é feature nem label do mo
 `modo`: `aberto`, `discreto` ou `pausado`. Uma pulseira **pausada não anuncia nem registra
 encontros**. O histórico de modos alimenta a taxa de silenciamento (seção 3.2).
 
-## `feedback` (proposta inicial — fechar com o Design)
+## `feedback` (implementado no backend; padrão físico em validação com o Design)
 
 ```json
 {"v": 1, "encontro_id": "e-001042", "nivel": "periferico_leve", "padrao": "luz_suave",
@@ -85,4 +85,5 @@ em reentregas da detecção. O padrão físico de luz segue em validação com D
 2. Valida os campos acima.
 3. Traduz os tokens para usuários. Token desconhecido é rejeitado.
 4. Confere se o token do publicador é do dono da pulseira do tópico.
-5. Grava em `encontros`, `interesses` ou `status_pulseira`. Reentregas do QoS 1 são ignoradas.
+5. Em `proximidade`, consulta avaliações anteriores e publica `feedback` se alguma categoria superar o corte. Registra o aviso em `avisos_proximidade` para deduplicar.
+6. Grava `encontro`, `interesse` e `status` nas tabelas operacionais. Reentregas são ignoradas.

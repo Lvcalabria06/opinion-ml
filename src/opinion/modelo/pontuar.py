@@ -3,8 +3,8 @@ Pontuação de encontros novos com o baseline registrado no MLflow (Checkpoint 2
 
 Um encontro chega no formato do contrato MQTT (IDs anônimos e rotativos), é traduzido
 como a ingestão traduz e passa pelas MESMAS funções do pipeline do CC2 (compatibilidade,
-features, completar/codificar), usando só o que existia antes do início dele. O modelo
-devolve a probabilidade de conexão em 48 h e o limiar escolhido na validação decide o sinal.
+features, completar/codificar), usando só o que existia antes do início dele. O baseline geral opcional devolve a probabilidade estimada de conexão em 48 h.
+O aviso de proximidade é decidido por categoria em opinion.sinal_categoria.
 """
 from __future__ import annotations
 

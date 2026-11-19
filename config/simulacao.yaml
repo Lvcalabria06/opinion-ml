@@ -11,7 +11,7 @@
 # ------------------------------------------------- usuários, obras e avaliações
 # amazon2023: REAIS (Amazon Reviews 2023, ver config/fontes.yaml e docs/fontes_dados.md).
 #   Persona = a mais parecida com a mistura de mídias que a pessoa avalia de verdade;
-#   gosto e atividade vêm das avaliações reais. n_usuarios, n_obras e
+#   atividade vem das avaliações reais; o gosto é comparado por mídia no encontro. n_usuarios, n_obras e
 #   semanas_historico_previo abaixo só valem para "sintetico".
 # sintetico: tudo inventado pelo simulador (como na Sprint 1).
 usuarios:

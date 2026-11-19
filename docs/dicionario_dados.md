@@ -45,15 +45,15 @@ interações entre amigos e interações vindas do feed.
 `encontro_id, conectou`. Vale 1 se, em até 48 h após o fim do encontro, um dos dois seguiu, abriu
 o perfil, curtiu ou comentou uma review, ou salvou uma obra avaliada pelo outro (seção 4.4).
 
-É uma **referência para conferência**. No Sprint 2, o label deve ser recalculado pela DAG do
+É uma **referência para conferência**. O label é recalculado pela DAG do
 Airflow a partir das tabelas `encontros` e `interacoes` do banco.
 
 ## `verdade_simulacao_NAO_USAR_COMO_FEATURE/`
 
-Variáveis ocultas, só para validar a simulação (Sprint 2) e nunca para treinar o modelo:
+Variáveis ocultas, só para validar a simulação e nunca para treinar o modelo:
 
 - `usuarios_ocultos.csv`: persona, abertura social, nível de atividade
-- `encontros_ocultos.csv`: usuários reais, se eram amigos, compatibilidade "verdadeira", probabilidade latente de conexão e se o encontro de fato causou a conexão
+- `encontros_ocultos.csv`: usuários reais, se eram amigos, mídias sinalizadas, probabilidade latente de conexão e se o encontro de fato causou a conexão
 - `interacoes_causadas_por_encontro.csv`: quais interações nasceram de qual encontro
 
 ## Cuidados para o Sprint 2 (seção 4.5)
@@ -77,7 +77,7 @@ Gerada pela DAG `opinion_pipeline` (ou `python -m opinion.pipeline.executar`). �
 | usuario_a, usuario_b, inicio, fim, semana | contexto do encontro (não usar como feature) |
 | split | `treino` (semanas 1–8), `validacao` (9–10), `teste` (11–12) |
 | local_original | local em texto (para análise; a versão codificada está nas features) |
-| **features** (33) | listadas em `metadados.json → colunas_features`, agrupadas em `grupos_features` |
+| **features** (48) | listadas em `metadados.json → colunas_features`, agrupadas em `grupos_features` |
 | conectou | label: 1 se houve interação entre os dois em até 48 h após o fim |
 
 Features, todas calculadas com dados de **antes do início** do encontro:
@@ -100,14 +100,12 @@ positivo, ou quando ambos deram nota de favorita à mesma obra. Rótulos genéri
 `compat_score_<midia>` vale zero sem match. Havendo match, combina cosseno reescalado,
 concordância de notas nas mesmas obras (0,5 na ausência delas) e favoritas em comum
 (saturação em três), com os pesos de `config/pipeline.yaml`. A regra simples usa o maior desses
-cinco scores como `compat_score`. Os modelos recebem os cinco scores e seus indicadores.
+cinco scores como `compat_score`. O dataset geral conserva os cinco scores e indicadores. Cada modelo por mídia usa apenas os indicadores de gosto da própria mídia, além das features de encontro, contexto, perfil e relação.
 As contagens de obras e favoritas em comum somam as mídias, a concordância de notas é
 ponderada pelo número de obras comuns e os resumos de gêneros usam o maior valor por mídia
 (similaridade resumida limitada inferiormente a zero).
 
-`midias_match` na previsão lista todas as mídias que satisfizeram o critério, separadas por
-`|`. O sinal usa a probabilidade do modelo e o limiar ajustado na validação. O rótulo
-`conectou` continua sendo observado uma única vez por encontro, inclusive para pares sem match.
+O aviso usa `match_<midia>` e `compat_score_<midia> >= 0.68` de forma independente por categoria. A demonstração grava as categorias em `avisos_categoria.csv`. `midias_match` em `previsoes.csv` pertence ao baseline geral opcional. O rótulo `conectou` é observado uma vez por encontro, inclusive para pares sem match.
 
 `features_encontros.parquet`: os mesmos dados para **todos** os encontros, inclusive os que ainda aguardam
 as 48 h (`label_disponivel = 0`) e os removidos na fronteira (`split = purgado`).

@@ -38,8 +38,8 @@ projeto (semente 42), com cota por mídia dominante. Amostra versionada: 48.018 
 58.251 avaliações reais (`data/reais/amazon2023/fonte.json`).
 
 Novas extrações aceitam uma única mídia (`min_midias: 1`). A cota total continua ajustável
-em `n_usuarios`. O bootstrap versionado permite comparar as duas formas de cruzamento
-nos mesmos encontros, antes de trocar a população. Para incorporar outra fonte, cada
+em `n_usuarios`. O bootstrap atual usa afinidade por mídia e o corte de aviso por categoria.
+A amostra versionada ainda contém os 1.200 usuários selecionados anteriormente. Para incorporar outra fonte, cada
 avaliação precisa de usuário, obra, nota e data, e cada obra de mídia e gêneros.
 Identificadores de fontes independentes precisam de prefixos próprios.
 

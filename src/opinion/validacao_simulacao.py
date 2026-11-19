@@ -41,7 +41,7 @@ ORDEM_CONTEXTOS = ["convencao_games", "cinema", "livraria", "campus"]
 
 # --------------------------------------------------------------------------- premissas
 PREMISSAS = [
-    ("simulacao.n_usuarios", "Tamanho de uma comunidade ativa num campus/cidade média; gera ~55 mil encontros, o bastante "
+    ("simulacao.n_usuarios", "Tamanho de uma comunidade ativa num campus/cidade média; gera ~69 mil encontros, o bastante "
      "para split temporal + validação cruzada com positivos suficientes em cada parte.", "Escala do piloto real."),
     ("simulacao.semanas", "Exigido pelo split temporal da seção 4.5 (treino 1–8, validação 9–10, teste 11–12).", "—"),
     ("simulacao.semanas_historico_previo", "Usuários já têm histórico de avaliações quando a pulseira chega; sem isso "
@@ -64,7 +64,7 @@ PREMISSAS = [
      "anterior citam uso de dados).", "Modos escolhidos nos testes."),
     ("conexao.intercepto", "Calibra a taxa base: ~5–8% dos encontros entre desconhecidos viram conexão — raro, como "
      "esperado para abordagens entre estranhos.", "Taxa de conversão real (indicador da seção 3.2)."),
-    ("conexao.compat", "Gosto parecido aumenta a chance de conexão (hipótese do projeto), mas não determina sozinho.",
+    ("conexao.compat", "Após aviso por categoria, a afinidade aumenta a chance simulada de conexão.",
      "Comparar taxa por faixa de compatibilidade nos dados reais."),
     ("conexao.abertura", "Pessoas abertas conectam mais; o produto dos dois exige que ambos estejam abertos.", "—"),
     ("conexao.duracao", "Encontros longos indicam conversa ou atividade em comum.", "Taxa por duração nos dados reais."),

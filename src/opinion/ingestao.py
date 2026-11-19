@@ -6,8 +6,8 @@ Para cada mensagem em opinion/pulseira/+/proximidade | encontro | interesse | st
   2. valida contra o contrato (src/opinion/contrato.py)
   3. traduz os IDs anônimos e rotativos para o usuário real
   4. confere se a pulseira que publicou pertence mesmo ao usuário informado
-  5. grava em `encontros`, `interesses` ou `status_pulseira`
-     (reentregas do QoS 1 com o mesmo encontro_id são ignoradas)
+  5. em proximidade, avalia cada categoria e publica feedback à pulseira publicadora
+  6. grava encontros, interesses e status; deduplica reentregas do QoS 1
 
     python -m opinion.ingestao
 """

@@ -12,7 +12,8 @@ Colunas geradas
   sim_notas             concordância das notas nas mesmas obras: 1 - |diferença média| / 4
                         (vazio se não há obra em comum)
   favoritas_comuns      obras que os dois avaliaram com nota >= 4
-  compat_score          pontuação única 0–1, usada pela REGRA SIMPLES de referência
+  compat_score_<midia>  pontuação 0–1 por mídia, usada no aviso por categoria
+  compat_score          máximo dos scores por mídia; referência do baseline geral
 """
 from __future__ import annotations
 

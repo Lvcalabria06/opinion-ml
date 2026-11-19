@@ -25,4 +25,4 @@ python -m embedded.pulseira_virtual replay --velocidade 3600   # 1 h simulada po
 python -m embedded.pulseira_virtual ao-vivo --por-minuto 30    # encontros novos, agora
 ```
 
-No Docker Compose, os serviços `pulseira-replay` e `pulseira-ao-vivo` rodam esses comandos.
+No Docker Compose, os serviços `pulseira-replay` e `pulseira-ao-vivo` rodam esses comandos. O replay publica uma proximidade no início e um encontro ao fim para cada par. O feedback inclui todas as categorias de afinidade alta.

@@ -15,11 +15,12 @@ python -m opinion.checkpoint2 --usuarios usr-00694 usr-01029
 
 O treino por mídia usa os encontros em que ambos tinham avaliações daquela mídia, inclusive
 pares de baixa afinidade. O comando aceita também `filme`, `serie`, `jogo` e `livro`.
-As quatro famílias aprovadas estimam a interação em até 48 h. O aviso usa o corte
-`compat_score.afinidade_alta` de `config/pipeline.yaml`. O baseline acadêmico CC3
-segue acessível via `python -m opinion.checkpoint2 --retreinar`.
-O experimento atual usa `opinion-cc4-aviso-categoria-<mídia>` no MLflow.
-Os números das sprints abaixo descrevem versões anteriores.
+O comparador avalia quatro famílias e registra a selecionada em cada mídia para estimar
+a interação em até 48 h. O aviso usa o corte `compat_score.afinidade_alta` de
+`config/pipeline.yaml`. O baseline acadêmico CC3 segue acessível após
+`python -m opinion.modelo.treinar`, com `python -m opinion.checkpoint2 --baseline`.
+O experimento atual usa `opinion-cc4-aviso-categoria-<midia>` no MLflow.
+Os números da EDA e da comparação geral abaixo estão identificados como históricos.
 [Regra e resultados por mídia](docs/match_por_midia.md) · [Contrato da pulseira](docs/contrato_mqtt.md)
 
 > **A preencher pela equipe** (exigido pelo item 6 da especificação):
@@ -50,13 +51,13 @@ ainda são simulados. Qualquer métrica mede essa mistura, não usuários reais 
 ## Visão geral
 
 ```
- Amazon Reviews 2023 (real)          SPRINT 1 (CC1)                         SPRINT 2 (CC2)              SPRINT 3 (CC3)
+ Amazon Reviews 2023 (real)          SPRINT 1 (CC1)                         SPRINT 2 (CC2)              SPRINT 3 (CC3/CC4)
  fontes.amazon2023 ─► data/reais/ ─► gerar_bootstrap ─► pulseira_virtual ─► MQTT ─► ingestao ─► BANCO
                                           │                                      Airflow: opinion_pipeline
                                           └─► carregar_historico_app              … ─► dataset_modelo.parquet
                                                                                               │
                                                                                               ▼
-                                                                                    opinion.modelo.treinar ─► MLflow
+                                                                                    opinion.modelo.comparar --midia ─► MLflow
                                                                                     Checkpoint 2
 ```
 
@@ -64,9 +65,9 @@ ainda são simulados. Qualquer métrica mede essa mistura, não usuários reais 
 
 ## Sprint 1 — CC1: dados e caminho até o banco
 
-- **`src/opinion/gerar_bootstrap.py`:** simula 1.200 usuários em 12 semanas (06/07 a 27/09/2026), indo a cinema, livraria, campus e a uma convenção de games (semanas 3, 7 e 11). Gera 54.586 encontros, 42.846 interações no app, 60.787 avaliações, 6.658 toques de interesse e 2.396 trocas de modo. As premissas ficam em `config/simulacao.yaml`.
-- **`embedded/pulseira_virtual.py`:** publica encontros, toques e status no contrato MQTT da seção 4.2, com IDs anônimos que mudam todo dia. Tem dois modos: `replay` (as 12 semanas) e `ao-vivo`.
-- **`src/opinion/ingestao.py`:** recebe as mensagens, valida, traduz os IDs, confere o dono da pulseira e grava no banco.
+- **`src/opinion/gerar_bootstrap.py`:** simula encontros entre 1.200 usuários em 12 semanas (06/07 a 27/09/2026), em cinema, livraria, campus e convenção de games (semanas 3, 7 e 11). Gera 69.384 encontros, 38.426 interações no app, 58.251 avaliações reais, 4.443 toques de interesse e 2.343 trocas de modo. As premissas ficam em `config/simulacao.yaml`.
+- **`embedded/pulseira_virtual.py`:** publica proximidade no início, encontros ao fim, toques e status no contrato MQTT da seção 4.2, com IDs anônimos que mudam todo dia. Tem dois modos: `replay` (as 12 semanas) e `ao-vivo`.
+- **`src/opinion/ingestao.py`:** recebe as mensagens, valida, traduz os IDs, confere o dono da pulseira, grava no banco e envia o aviso por categoria à pulseira publicadora.
 - **`src/opinion/checkpoint1.py`:** teste do Checkpoint 1 (encontro publicado → broker → banco → consulta).
 
 ## Sprint 2 — CC2: pipeline, EDA e validação
@@ -76,7 +77,7 @@ ainda são simulados. Qualquer métrica mede essa mistura, não usuários reais 
 | Task | O que faz | Código |
 |---|---|---|
 | `ingestao` | Lê do banco (o que o MQTT gravou + histórico do app) e grava uma "foto" em `data/staging/`. Para se faltar dado ou houver inconsistência. | `src/opinion/pipeline/ingestao.py` |
-| `compatibilidade` | Similaridade de gosto entre os dois: gêneros, notas nas mesmas obras, favoritas em comum. **Só com avaliações anteriores ao encontro.** | `src/opinion/pipeline/compatibilidade.py` |
+| `compatibilidade` | Similaridade de gosto por mídia entre os dois: gêneros, notas nas mesmas obras, favoritas em comum. **Só com avaliações anteriores ao encontro.** | `src/opinion/pipeline/compatibilidade.py` |
 | `features` | Encontro (duração, RSSI, encontros anteriores do par), contexto (local, dia, hora, modo), perfil (atividade, conexões) e relação (já se seguem, já interagiram). **Tudo até o instante do encontro.** | `src/opinion/pipeline/features.py` |
 | `label` | `conectou = 1` se houve interação entre os dois em até 48 h após o fim. Encontros com menos de 48 h ficam "aguardando". | `src/opinion/pipeline/label.py` |
 | `preparacao` | Split temporal (semanas 1–8 / 9–10 / 11–12), purga da fronteira, imputação, one-hot e checagens de qualidade. Grava o dataset do modelo. | `src/opinion/pipeline/preparacao.py` |
@@ -88,24 +89,24 @@ As tasks `compatibilidade`, `features` e `label` rodam em paralelo. A DAG roda d
 
 | Split | Encontros | % conectou | Pares |
 |---|---|---|---|
-| treino (semanas 1–8) | 36.930 | 13,5% | 26.254 |
-| validação (9–10) | 6.623 | 13,7% | 4.946 |
-| teste (11–12) | 10.501 | 14,2% | 8.152 |
+| treino (semanas 1–8) | 46.244 | 8,14% | 33.684 |
+| validação (9–10) | 10.101 | 8,46% | 7.995 |
+| teste (11–12) | 11.970 | 7,98% | 9.458 |
 
-- `dataset_modelo.parquet`: 33 features, `conectou`, `split` e `par_id` (para o k-fold agrupado por par do CC6).
+- `dataset_modelo.parquet`: 48 features, `conectou`, `split` e `par_id` (para o k-fold agrupado por par do CC6).
 - `features_encontros.parquet`: todos os encontros, inclusive os que ainda aguardam as 48 h. Serve para pontuar encontros novos no CC7.
 - `metadados.json`: lista de features por grupo, tamanhos, taxas e corte dos dados.
 
 **Garantias testadas** (`tests/test_pipeline.py`, rode com `python -m pytest tests -q`):
 - **Sem informação do futuro:** para 30 encontros sorteados, as features são recalculadas apagando tudo que aconteceu depois do início. O resultado tem de ser idêntico. Também conferimos que o teste falha quando um vazamento é inserido de propósito.
 - **Label correto:** 100% de concordância com o gabarito da simulação, e a janela de 48 h está testada nas bordas.
-- **Purga:** os 532 encontros do fim da semana 8, cujo label só seria conhecido na semana 9, saem do treino.
+- **Purga:** os 1.069 encontros do fim da semana 8, cujo label só seria conhecido na semana 9, saem do treino.
 
 A padronização dos dados fica de propósito para o pipeline do modelo (CC3), ajustada só no treino de cada fold, para não vazar informação.
 
 ### Notebook de EDA (`notebooks/eda_encontros.ipynb`, já executado; versão HTML ao lado)
 
-Principais achados (entre **desconhecidos**, o público real da pulseira):
+**Resultados históricos do notebook executado antes do bootstrap atual.** Os números abaixo não descrevem a rodada com avisos por categoria. Principais achados daquela rodada (entre **desconhecidos**):
 
 | Achado | Número |
 |---|---|
@@ -120,9 +121,9 @@ Principais achados (entre **desconhecidos**, o público real da pulseira):
 
 Gerada por `python -m opinion.validacao_simulacao` (cerca de 1 min). Tem quatro partes:
 1. **Premissas:** cada parâmetro, com valor, justificativa e como validar com dados reais.
-2. **Checagens de sanidade:** 16 OK e 1 de atenção (RSSI). Uma delas encontrou um **bug real no simulador**, já corrigido: 3 encontros eram registrados com a pulseira pausada.
+2. **Checagens de sanidade:** na rodada atual, 15 OK, 1 atenção (RSSI) e 1 falha: a taxa de interação entre desconhecidos ficou em 1,2%, abaixo da faixa de 2%–15%.
 3. **Sensibilidade:** cenários pessimista, base e otimista (`config/cenarios_sensibilidade.yaml`), rodando o mesmo pipeline e os mesmos modelos.
-   - **Se mantém:** a ordem dos contextos, e o fato de o modelo superar a regra (inclusive entre desconhecidos).
+   - **Se mantém:** a ordem dos contextos e o melhor modelo supera a regra entre desconhecidos nos três cenários.
    - **Não se mantém:** qual algoritmo é o melhor e quais features mais pesam. Esses resultados não devem ser apresentados como descoberta.
 4. **Plano de comparação com dados reais** dos testes do Design (semana 16).
 
@@ -153,17 +154,17 @@ python -m opinion.gerar_bootstrap            # usa data/reais/amazon2023/ (já v
 Regressão Logística e Árvore de Decisão, split temporal, padronização só no treino (dentro do
 `Pipeline`), comparação com a regra simples (`compat_score`). Escolha do modelo, limiar do sinal
 (F0,5) e aprovação contra a regra acontecem na **validação**; o teste só é relatado. O vencedor é
-registrado no MLflow como `opinion-baseline-cc3@champion`, com PR-AUC, ROC-AUC, Brier, precisão,
+registrado no MLflow como `opinion-baseline-cc3-aviso-categoria@champion`, com PR-AUC, ROC-AUC, Brier, precisão,
 recall, F0,5 e matriz de confusão, mais as curvas PR, ROC e de calibração como artefatos.
 
-O **Checkpoint 2** carrega esse modelo (sem retreinar), monta um encontro **novo** no formato do
-contrato MQTT, passa pelas funções do pipeline (`src/opinion/modelo/pontuar.py`) e mostra a
-probabilidade e o sinal do modelo e da regra. A previsão vai para `data/processed/previsoes.csv`
-(o dashboard ainda não existe).
+O **Checkpoint 2** monta um encontro novo no formato do contrato MQTT, calcula o aviso por
+categoria e estima a interação com os modelos de mídia registrados. A demonstração fica em
+`data/processed/avisos_categoria.csv`. O baseline geral pode ser exibido com `--baseline` e
+grava sua previsão em `data/processed/previsoes.csv`.
 
 ```bash
 python -m opinion.modelo.treinar             # treina e registra
-python -m opinion.checkpoint2                # Checkpoint 2
+python -m opinion.checkpoint2 --usuarios usr-00694 usr-01029  # aviso musical
 mlflow ui --backend-store-uri sqlite:///mlruns/mlflow.db   # http://localhost:5000
 ```
 
@@ -171,14 +172,16 @@ mlflow ui --backend-store-uri sqlite:///mlruns/mlflow.db   # http://localhost:50
 
 `src/opinion/modelo/comparar.py` compara Regressão logística, Árvore de decisão, Random Forest e
 Gradient Boosting no mesmo protocolo do CC3 (escolha e limiar na validação, teste medido uma vez).
-Para cada modelo, um run no MLflow (experimento `opinion-cc4`) com métricas, matriz de confusão,
+Para cada mídia, um experimento próprio no MLflow (`opinion-cc4-aviso-categoria-<midia>`).
+Cada modelo tem um run com métricas, matriz de confusão,
 curvas ROC e precisão × recall, calibração, importância por permutação e o modelo; no run pai, os
-gráficos lado a lado e o intervalo de confiança das diferenças. A análise crítica é gerada em
-[`docs/comparacao_modelos.md`](docs/comparacao_modelos.md), e o vencedor vai para
-`opinion-cc4-melhor@melhor`.
+gráficos lado a lado e o intervalo de confiança das diferenças. A comparação geral histórica está em
+[`docs/comparacao_modelos.md`](docs/comparacao_modelos.md). O vencedor de cada mídia vai para
+`opinion-cc4-aviso-categoria-<midia>@melhor`; os resultados atuais estão em
+[`docs/match_por_midia.md`](docs/match_por_midia.md).
 
 ```bash
-python -m opinion.modelo.comparar            # ~2 min; reescreve docs/comparacao_modelos.md
+python -m opinion.modelo.comparar --midia musica  # repita para filme, serie, livro e jogo
 ```
 
 ---
@@ -237,10 +240,10 @@ python -m opinion.validacao_simulacao            # regera docs/validacao_simulac
 
 # CC3 — baseline e Checkpoint 2
 python -m opinion.modelo.treinar
-python -m opinion.checkpoint2
+python -m opinion.checkpoint2 --baseline
 
 # CC4 — comparação de modelos
-python -m opinion.modelo.comparar
+python -m opinion.modelo.comparar --midia musica
 ```
 
 Sem broker nem banco, o pipeline também lê direto dos arquivos: `python -m opinion.pipeline.executar --fonte arquivos`.
@@ -263,25 +266,25 @@ Siga a **Opção B** acima, nesta ordem. Cada teste prova uma parte dos requisit
 | 8 | abrir `notebooks/eda_encontros.html` | EDA e preparação dos dados com justificativas | CC2 |
 | 9 | `python -m opinion.validacao_simulacao` | premissas, sanidade e sensibilidade | CC2 |
 | 10 | abrir `data/reais/amazon2023/fonte.json` | usuários/obras/avaliações reais com fonte citada | CC3 |
-| 11 | `python -m opinion.checkpoint2` | **Checkpoint 2**: um encontro novo recebe a probabilidade do baseline registrado | CC3 |
+| 11 | `python -m opinion.checkpoint2 --usuarios usr-00694 usr-01029` | **Checkpoint 2**: encontro novo recebe aviso musical e estimativa de interação | CC3 |
 
 ### 1. Dataset simulado
-Em `data/bootstrap/relatorio_simulacao.md`, confira: 1.200 usuários, cerca de 54,6 mil encontros e **cerca de 14% com `conectou = 1`**, além de picos de encontros nas semanas 3, 7 e 11 (convenção).
+Em `data/bootstrap/relatorio_simulacao.md`, confira: 1.200 usuários, 69.384 encontros e **8,12% com `conectou = 1`**, além de picos de encontros nas semanas 3, 7 e 11 (convenção).
 
 ### 2. Replay pela pulseira virtual (~2 min)
 ```
-[pulseira] Fim do replay: {'encontro': 54586, 'interesse': 6658, 'status': 2396}
+[pulseira] Fim do replay: {'proximidade': 69384, 'encontro': 69384, 'interesse': 4443, 'status': 2343}
 ```
 No terminal da ingestão aparece o progresso a cada 5 mil mensagens, com `'rejeitadas': 0`.
 
 ### 3. Nada se perdeu
 ```
 Arquivo do bootstrap  x  banco
-  encontros    54,586   54,586   OK
-  interesses    6,658    6,658   OK
-  status        2,396    2,396   OK
+  encontros    69,384   69,384   OK
+  interesses    4,443    4,443   OK
+  status        2,343    2,343   OK
 
-IDs rotativos traduzidos corretamente: 54,586 de 54,586 encontros
+IDs rotativos traduzidos corretamente: 69,384 de 69,384 encontros
 RESULTADO: tudo certo ✔
 ```
 Se aparecer `DIFERENTE`, a ingestão ainda está processando: espere alguns segundos e rode de novo.
@@ -302,25 +305,25 @@ No terminal da ingestão aparecem avisos `Rejeitada (...)`, o que é esperado. N
 ### 6. Pipeline (CC2)
 ```
 [ingestao       ]   ...  encontros_de 2026-07-06 ... encontros_ate 2026-09-27 ...
-[compatibilidade]   ...  {'encontros': 54637, ...}
+[compatibilidade]   ...  {'encontros': 69384, ...}
 [features       ]   ...
-[label          ]   ...  {'rotulados': 54586, 'pendentes': 51, 'taxa_conexao': 0.1364, ...}
-[preparacao     ]   ...  {'dataset_modelo': 54054, 'encontros_purgados_fronteira': 532, 'concordancia_label_referencia': 1.0}
+[label          ]   ...  {'rotulados': 69384, 'pendentes': 0, 'taxa_conexao': 0.0812, ...}
+[preparacao     ]   ...  {'dataset_modelo': 68315, 'encontros_purgados_fronteira': 1069, 'concordancia_label_referencia': 1.0}
 
-Dataset do modelo: {"teste": {"encontros": 10501, ...}, "treino": {"encontros": 36930, ...}, "validacao": {"encontros": 6623, ...}}
+Dataset do modelo: {"teste": {"encontros": 11970, ...}, "treino": {"encontros": 46244, ...}, "validacao": {"encontros": 10101, ...}}
 ```
 Os números de encontros e pendentes variam um pouco conforme quantos encontros "ao vivo" você gerou no teste 5. Esses encontros ficam **pendentes** porque ainda não se passaram 48 h. `concordancia_label_referencia: 1.0` quer dizer que o label bate 100% com o gabarito da simulação.
 
 **No Airflow:** com `airflow dags test opinion_pipeline`, ou o botão Trigger na interface, as 6 tasks terminam em `success`, e o log da task `resumo` mostra:
 ```
-Dataset do modelo: 54,054 encontros | taxa de conexão 13.7%
-  treino      36,930 encontros  13.5% conectou  26,254 pares
+Dataset do modelo: 68,315 encontros | taxa de conexão 8.16%
+  treino      46,244 encontros  8.14% conectou  33,684 pares
   ...
 ```
 
 ### 7. Testes automatizados (~35 s)
 ```
-4 passed
+34 passed
 ```
 O teste principal recalcula as features de 30 encontros **apagando tudo o que aconteceu depois do início de cada um**. Se algum valor mudar, alguma feature estaria olhando para o futuro, e o teste falha.
 
@@ -328,7 +331,7 @@ O teste principal recalcula as features de 30 encontros **apagando tudo o que ac
 Abra `notebooks/eda_encontros.html` no navegador; não precisa instalar nada. Para reexecutar, rode o teste 6 antes e depois `jupyter notebook notebooks/eda_encontros.ipynb` → *Run All*.
 
 ### 9. Validação da simulação (~1 min)
-No final aparecem 16 checagens `OK`, 1 `ATENÇÃO` (RSSI) e a lista de conclusões que se mantêm ou não nos três cenários. O documento `docs/validacao_simulacao.md` é regerado.
+No final aparecem 15 checagens `OK`, 1 `ATENÇÃO` (RSSI), 1 `FALHA` (taxa entre desconhecidos) e a lista de conclusões que se mantêm ou não nos três cenários. O documento `docs/validacao_simulacao.md` é regerado.
 
 ### Se algo der errado
 
@@ -347,12 +350,12 @@ Para recomeçar do zero, pare a ingestão, apague `data/opinion.db` e repita a p
 ## Testado / não testado
 
 - **Testado:**
-  - fluxo CC1 completo (SQLite + broker local): replay sem perdas, 100% dos IDs certos e Checkpoint 1;
-  - DAG executada no **Airflow 3.1** lendo do banco preenchido pelo MQTT, com as 6 tasks em sucesso e os encontros ao vivo corretamente "aguardando 48 h";
+  - fluxo CC1 completo (SQLite + broker local), Checkpoint 1 e DAG no **Airflow 3.1** em rodada anterior;
+  - replay do bootstrap atual pela classe de ingestão, com 145.554 mensagens aceitas e 6.972 avisos com os motivos esperados; o broker MQTT da rodada atual ainda precisa de verificação integrada;
   - testes automatizados;
-  - notebook executado do início ao fim;
-  - validação nos 3 cenários (regerada em 22/10/2026 com os usuários reais: 16 OK, 1 atenção);
-  - baseline CC3 no MLflow (PR-AUC desconhecidos no teste 0,180 > regra 0,155) e **Checkpoint 2** (29/10/2026).
+  - notebook executado do início ao fim em rodada anterior; o HTML está marcado como histórico;
+  - validação nos 3 cenários, regerada em 18/11/2026: 15 OK, 1 atenção, 1 falha;
+  - modelos por mídia no MLflow e demonstração do **Checkpoint 2**;
 - **Não testado:** `docker compose` (com PostgreSQL e o container do Airflow), porque o ambiente onde isso foi escrito não tinha Docker. Rodem uma vez antes de apresentar.
 
 ## Estrutura do repositório
@@ -367,10 +370,10 @@ são ajustes permitidos pelo próprio item 6.
 ├── notebooks/             EDA do bootstrap e das etapas de preparação
 ├── src/opinion/           código de treinamento, pipeline e backend (pacote Python `opinion`)
 │   ├── pipeline/          CC2: etapas do pipeline (as mesmas funções que a DAG chama)
-│   ├── modelo/            CC3/CC4: baseline, comparação de modelos, pontuação de encontro novo
+│   ├── modelo/            CC3/CC4: baseline, modelos por mídia, pontuação de encontro novo
 │   ├── fontes/            CC3: download e filtro da Amazon Reviews 2023
 │   ├── gerar_bootstrap.py simulador do mundo (encontros, seguidores, interações, label)
-│   ├── ingestao.py        recebe o MQTT, valida, traduz os IDs e grava no banco
+│   ├── ingestao.py        recebe MQTT, grava encontros e envia avisos por categoria
 │   └── checkpoint1.py, checkpoint2.py
 ├── embedded/              simulador do sistema embarcado: a pulseira virtual (MQTT)
 ├── dags/                  DAG do Apache Airflow (opinion_pipeline)

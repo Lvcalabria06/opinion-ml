@@ -10,4 +10,4 @@ O que a especificação pede que ele mostre:
 - os indicadores da seção 3.2 do documento do projeto: taxa de conversão de encontros, precisão dos
   sinais da pulseira e taxa de silenciamento (fadiga de notificação).
 
-Enquanto ele não existe, o Checkpoint 2 grava as previsões em `data/processed/previsoes.csv`.
+Enquanto ele não existe, o Checkpoint 2 grava avisos por categoria e estimativas em `data/processed/avisos_categoria.csv`. A previsão do baseline geral opcional fica em `previsoes.csv`.

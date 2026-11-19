@@ -23,8 +23,7 @@ O valor inicial do corte está documentado em [Match por mídia](match_por_midia
   curtiu ou comentou uma review, ou salvou uma obra avaliada pelo outro (seção 4.4).
 - **Público que importa:** **desconhecidos** (`algum_segue == 0`). Amigos interagem de qualquer jeito
   e inflam as métricas; é entre desconhecidos que o sinal agrega valor.
-- **Regra simples de referência:** sinalizar quando a compatibilidade de gosto (`compat_score`)
-  passa de um limite. Todo modelo precisa superar essa regra para se justificar.
+- **Aviso atual:** cada categoria tem seu próprio `match` e score. Uma categoria acima de 0,68 gera aviso na proximidade. O treino por mídia compara o modelo com a regra de score daquela mídia.
 
 ## Por que os dados são (ainda) simulados
 
@@ -63,7 +62,8 @@ O curso pede entregas de Ciência da Computação (CC) a cada sprint.
 | 1 | CC1 | dados simulados, pulseira virtual via MQTT, ingestão, banco, **Checkpoint 1** |
 | 2 | CC2 | pipeline no Airflow, EDA, validação da simulação, sessão com o Design |
 | 3 (S12) | CC3 | baseline explicável (Regressão Logística ou Árvore de Decisão) no **MLflow**, split temporal, comparação com a regra simples, **Checkpoint 2** |
-| depois | CC4, CC6, CC7 | escolha do modelo; k-fold agrupado por par; sinal em tempo real pela pulseira |
+| 4 | CC4 | comparação de quatro famílias em recortes por mídia |
+| depois | CC5, CC6, CC7 | otimização, estabilidade, API de inferência; o aviso MQTT por categoria já funciona na ingestão |
 
 Semana 16: testes do protótipo do Design com pessoas reais; os encontros reais entram pelo mesmo MQTT
 e pelo mesmo pipeline.
@@ -79,10 +79,11 @@ e pelo mesmo pipeline.
 
 | Termo | Significado |
 |---|---|
-| encontro | dois usuários perto um do outro por tempo suficiente, registrado pela pulseira |
+| encontro | proximidade detectada pela pulseira; ao fim, registra duração e RSSI médio |
 | conexão / `conectou` | interação no app entre os dois em até 48 h após o fim do encontro |
 | desconhecidos | encontro em que nenhum dos dois segue o outro (`algum_segue == 0`) |
-| regra simples | ordenar encontros por `compat_score`; a referência que o modelo precisa superar |
+| regra simples | ordenar encontros pelo score da mídia no respectivo recorte de treino |
+| aviso por categoria | sinal da pulseira decidido pelo score e pelo match de cada mídia no início da proximidade |
 | bootstrap | o dataset inicial em `data/bootstrap/`, hoje gerado pelo simulador |
 | verdade da simulação | variáveis ocultas em `data/bootstrap/verdade_simulacao_NAO_USAR_COMO_FEATURE/`, só para validação |
 | purga | remoção dos encontros do fim do treino cujo label só seria conhecido na validação |

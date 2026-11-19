@@ -13,6 +13,10 @@ A pulseira publica a proximidade de imediato e registra a duração ao encerrar 
 Os modelos estimam a interação posterior com os dados disponíveis ao fim. O corte
 inicial de 0,68 é uma hipótese de produto a validar com participantes.
 
+O treino atual recorta os encontros por histórico bilateral em cada mídia, incluindo afinidades
+baixas. Os cinco registros CC4 usam `opinion-cc4-aviso-categoria-<midia>@melhor`. A decisão
+de proximidade é independente da probabilidade estimada para interação após o encontro.
+
 ## D-012 · 17/11/2026 · Estrutura do repositório conforme o item 6 da especificação
 
 - **Decisão:** o pacote `opinion` vai para `src/opinion/` (instalável por `pyproject.toml`, e o
@@ -35,8 +39,8 @@ inicial de 0,68 é uma hipótese de produto a validar com participantes.
   (1.000 reamostras). Diferença cujo IC inclui zero não é apresentada como "modelo melhor".
 - **Fora do escopo de propósito:** otimização de hiperparâmetros (CC5, Optuna) e validação cruzada
   e estabilidade (CC6). Calibração é medida (Brier, curva), mas não corrigida aqui.
-- **Registro:** o vencedor vai para `opinion-cc4-melhor@melhor`; o baseline do CC3 continua em
-  `opinion-baseline-cc3@champion`, que é o modelo do Checkpoint 2.
+- **Registro histórico:** nessa rodada geral, o vencedor foi registrado como `opinion-cc4-melhor@melhor`
+  e o baseline como `opinion-baseline-cc3@champion`. Os registros atuais estão na D-013.
 
 ## D-010 · 29/10/2026 · Baseline CC3: escolha e aprovação na validação, limiar por F0,5
 

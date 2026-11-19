@@ -68,6 +68,7 @@ princípio, informações que refletem esse perfil agregado. O experimento mede 
 da representação de gosto e a restrição da amostra com esse mecanismo de geração de
 rótulos. O efeito de acrescentar novas populações ainda precisa ser medido.
 
-Para reproduzir uma linha, siga o [README](../README.md) e execute o comparador
-com a mídia correspondente. O experimento no MLflow contém os quatro modelos,
+Para reproduzir esta rodada histórica, recupere o bootstrap da revisão anterior ao aviso
+por categoria e execute o comparador com a mídia correspondente. A rodada histórica
+registrou no MLflow os quatro modelos,
 a regra simples, os limiares, as matrizes de confusão e os intervalos de confiança.
