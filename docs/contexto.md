@@ -14,9 +14,10 @@ cinema, livraria, campus e convenção de games.
 
 > Dois usuários acabaram de se encontrar. Qual a chance de eles **interagirem no app em até 48 h**?
 
-A resposta decide se a pulseira **dá ou não um sinal** discreto para a pessoa. Um sinal errado tem
-custo (incomoda, expõe); um sinal perdido também (conexão que não acontece). O custo de cada erro
-ainda será fechado com o Design e vai definir a métrica e o limiar finais.
+No protótipo local, a pulseira recebe um aviso no início do encontro quando há alta afinidade
+em pelo menos uma mídia. O aviso informa as categorias que atingiram o corte. Ao fim do
+encontro, o modelo do recorte estima a chance de interação posterior no app.
+O valor inicial do corte está documentado em [Match por mídia](match_por_midia.md).
 
 - **Label `conectou`:** 1 se, em até 48 h após o fim do encontro, um dos dois seguiu, abriu o perfil,
   curtiu ou comentou uma review, ou salvou uma obra avaliada pelo outro (seção 4.4).

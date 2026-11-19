@@ -13,7 +13,7 @@ Modos
 
 Para simplificar, um único cliente MQTT publica em nome de todas as pulseiras
 virtuais (cada uma no seu próprio tópico opinion/pulseira/{id}/...).
-Também escuta opinion/pulseira/+/feedback e mostra os sinais recebidos (CC7 em diante).
+Também escuta opinion/pulseira/+/feedback e mostra os sinais recebidos.
 
     python -m embedded.pulseira_virtual replay                 # ~500 mensagens/s (≈ 2 min)
     python -m embedded.pulseira_virtual replay --velocidade 3600   # 1 h simulada por segundo
@@ -22,6 +22,7 @@ Também escuta opinion/pulseira/+/feedback e mostra os sinais recebidos (CC7 em 
 from __future__ import annotations
 
 import argparse
+import heapq
 import json
 import logging
 import random
@@ -44,7 +45,7 @@ log = logging.getLogger(__name__)
 class Publicador:
     def __init__(self, duplicar: float = 0.0, invalidas: float = 0.0):
         self.duplicar, self.invalidas = duplicar, invalidas
-        self.enviadas = {"encontro": 0, "interesse": 0, "status": 0}
+        self.enviadas = {"proximidade": 0, "encontro": 0, "interesse": 0, "status": 0}
         self.feedbacks = 0
         self.c = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id=f"opinion-pulseira-virtual-{uuid.uuid4().hex[:6]}")
         self.c.max_inflight_messages_set(200)
@@ -67,11 +68,12 @@ class Publicador:
             return
         self.feedbacks += 1
         p = json.loads(msg.payload)
-        log.info("Feedback em %s: nível=%s padrão=%s", msg.topic.split("/")[2], p.get("nivel"), p.get("padrao"))
+        log.info("Feedback em %s: nível=%s padrão=%s %s", msg.topic.split("/")[2], p.get("nivel"),
+                 p.get("padrao"), p.get("mensagem", ""))
 
     def publicar(self, pulseira_id: str, tipo: str, payload: dict):
         if random.random() < self.invalidas:  # falha injetada: campo obrigatório some
-            payload = {k: v for k, v in payload.items() if k not in ("rssi_medio", "modo", "ts")}
+            payload = {k: v for k, v in payload.items() if k not in ("usuario_a", "modo", "ts")}
         texto = json.dumps(payload, ensure_ascii=False)
         self._ultimo = self.c.publish(C.topico(pulseira_id, tipo), texto, qos=C.QOS)
         if random.random() < self.duplicar:  # falha injetada: reentrega
@@ -95,7 +97,10 @@ def carregar_fila(pasta) -> list[tuple[datetime, str, str, dict]]:
                      {"v": C.VERSAO, "usuario": r.usuario, "modo": r.modo, "ts": r.ts}))
     for r in pd.read_csv(pasta / "encontros.csv").itertuples():
         ini = datetime.fromisoformat(r.inicio)
-        # a pulseira só publica quando o encontro termina
+        fila.append((ini, r.pulseira_id, "proximidade", {
+            "v": C.VERSAO, "encontro_id": r.encontro_id, "usuario_a": r.usuario_a, "usuario_b": r.usuario_b,
+            "inicio": r.inicio, "local": r.local}))
+        # A duração e o RSSI médio só ficam disponíveis ao encerrar o encontro.
         fila.append((ini + timedelta(seconds=int(r.duracao_s)), r.pulseira_id, "encontro", {
             "v": C.VERSAO, "encontro_id": r.encontro_id, "usuario_a": r.usuario_a, "usuario_b": r.usuario_b,
             "inicio": r.inicio, "duracao_s": int(r.duracao_s), "rssi_medio": float(r.rssi_medio), "local": r.local}))
@@ -153,8 +158,20 @@ def ao_vivo(a):
     intervalo = 60.0 / a.por_minuto
     log.info("Modo ao vivo: ~%g encontros/min entre %d usuários. Ctrl+C para parar.", a.por_minuto, len(u))
     fim = time.monotonic() + a.duracao_min * 60 if a.duracao_min else None
+    pendentes = []
+    proximo = time.monotonic()
     try:
         while fim is None or time.monotonic() < fim:
+            t = time.monotonic()
+            while pendentes and pendentes[0][0] <= t:
+                _, _, pulseira, tipo, mensagem = heapq.heappop(pendentes)
+                pub.publicar(pulseira, tipo, mensagem)
+            if t < proximo:
+                despertar = min(proximo, pendentes[0][0]) if pendentes else proximo
+                if fim is not None:
+                    despertar = min(despertar, fim)
+                time.sleep(max(0, despertar - time.monotonic()))
+                continue
             agora = datetime.now().replace(microsecond=0)
             h = agora.hour
             faixa = "madrugada" if h < 6 else "manha" if h < 12 else "tarde" if h < 18 else "noite"
@@ -165,14 +182,16 @@ def ao_vivo(a):
             vis = np.array(vis) * (u.modo != "pausado").to_numpy()
             ia, ib = rng.choice(len(u), size=2, replace=False, p=vis / vis.sum())
             dur, rssi = atributos_encontro(rng, cfg["locais"][local], False, cfg["amigos"])
-            inicio = agora - timedelta(seconds=dur)
+            inicio = agora
             pa, pb = u.iloc[ia], u.iloc[ib]
             eid = f"e-live-{uuid.uuid4().hex[:8]}"
-            pub.publicar(pa.pulseira_id, "encontro", {
-                "v": C.VERSAO, "encontro_id": eid,
-                "usuario_a": C.token_do_dia(pa.usuario_id, inicio.date()),
-                "usuario_b": C.token_do_dia(pb.usuario_id, inicio.date()),
-                "inicio": inicio.isoformat(), "duracao_s": dur, "rssi_medio": rssi, "local": local})
+            proximidade = {"v": C.VERSAO, "encontro_id": eid,
+                           "usuario_a": C.token_do_dia(pa.usuario_id, inicio.date()),
+                           "usuario_b": C.token_do_dia(pb.usuario_id, inicio.date()),
+                           "inicio": inicio.isoformat(), "local": local}
+            pub.publicar(pa.pulseira_id, "proximidade", proximidade)
+            encontro = {**proximidade, "duracao_s": dur, "rssi_medio": rssi}
+            heapq.heappush(pendentes, (t + dur, eid, pa.pulseira_id, "encontro", encontro))
             log.info("Encontro %s: %s x %s em %s (%d s, %.0f dBm)", eid, pa.pulseira_id, pb.pulseira_id, local, dur, rssi)
             for p in (pa, pb):
                 if rng.random() < 0.05 + 0.1 * p.abertura_social:
@@ -185,7 +204,7 @@ def ao_vivo(a):
                 u.at[k, "modo"] = novo
                 pub.publicar(u.at[k, "pulseira_id"], "status", {"v": C.VERSAO, "modo": novo, "ts": agora.isoformat(),
                                                                 "usuario": C.token_do_dia(u.at[k, "usuario_id"], agora.date())})
-            time.sleep(intervalo * rng.uniform(0.5, 1.5))
+            proximo = t + intervalo * rng.uniform(0.5, 1.5)
     except KeyboardInterrupt:
         pass
     finally:

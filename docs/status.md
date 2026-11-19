@@ -4,7 +4,12 @@
 > (feita, em revisão, bloqueada) ou quando uma decisão for tomada. Decisões com justificativa
 > vão também para [`decisoes.md`](decisoes.md).
 
-Última atualização: **17/11/2026** · Sprint atual: **Sprint 5 (CC5), semana S14 do cronograma**
+Última atualização: **18/11/2026** · Sprint atual: **Sprint 5 (CC5), semana S14 do cronograma**
+
+**Protótipo local.** A pulseira virtual anuncia a proximidade no início do encontro.
+O backend envia à publicadora as mídias com afinidade alta. O bootstrap foi regenerado
+e os cinco recortes foram retreinados. Consulte [Match por mídia](match_por_midia.md)
+para a política atual e a comparação histórica.
 
 ## Resumo em uma tela
 

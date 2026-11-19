@@ -5,6 +5,14 @@ fica em cima. Decisões ainda abertas ficam em [`status.md`](status.md).
 
 ---
 
+## D-013 · 18/11/2026 · Aviso por mídia no início do encontro
+
+O aviso indica os assuntos em que duas pessoas próximas mostram alta afinidade.
+A decisão usa apenas os históricos daquela mídia disponíveis no início do encontro.
+A pulseira publica a proximidade de imediato e registra a duração ao encerrar o encontro.
+Os modelos estimam a interação posterior com os dados disponíveis ao fim. O corte
+inicial de 0,68 é uma hipótese de produto a validar com participantes.
+
 ## D-012 · 17/11/2026 · Estrutura do repositório conforme o item 6 da especificação
 
 - **Decisão:** o pacote `opinion` vai para `src/opinion/` (instalável por `pyproject.toml`, e o

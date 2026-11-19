@@ -21,6 +21,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+from opinion.pipeline.compatibilidade import COLUNAS_MIDIA
 
 CATEGORICAS = ["local", "periodo"]
 NUMERICAS = [
@@ -36,10 +37,10 @@ NUMERICAS = [
     "atividade_min", "atividade_max", "historico_min", "historico_max", "conexoes_min", "conexoes_max",
     # relação
     "algum_segue", "seguem_mutuamente", "interacoes_anteriores_par", "interagiram_antes",
-]
+] + COLUNAS_MIDIA
 GRUPOS = {
     "encontro": NUMERICAS[0:5], "contexto": NUMERICAS[5:9] + ["local", "periodo"],
-    "compatibilidade": NUMERICAS[9:16], "perfil": NUMERICAS[16:22], "relacao": NUMERICAS[22:26],
+    "compatibilidade": NUMERICAS[9:16] + COLUNAS_MIDIA, "perfil": NUMERICAS[16:22], "relacao": NUMERICAS[22:26],
 }
 
 

@@ -21,10 +21,15 @@ import pandas as pd
 
 from opinion.pipeline.tempo import contar
 
+MIDIAS = ("filme", "serie", "livro", "jogo", "musica")
+INDICADORES = ("historico_comum", "compat_score", "match")
+COLUNAS_MIDIA = [f"{campo}_{midia}" for midia in MIDIAS for campo in INDICADORES]
 
 def _matriz_generos(obras: pd.DataFrame) -> tuple[list[str], dict[str, np.ndarray]]:
-    generos = sorted({g for gs in obras.generos.dropna() for g in gs.split("|")})
-    return generos, {o: np.isin(generos, gs.split("|")).astype(float) for o, gs in zip(obras.obra_id, obras.generos)}
+    generos_item = obras.generos.fillna("")
+    generos = sorted({g for gs in generos_item for g in gs.split("|") if g and not g.startswith("outros_")})
+    vetores = {gs: np.isin(generos, gs.split("|")).astype(float) for gs in generos_item.unique()}
+    return generos, dict(zip(obras.obra_id, generos_item.map(vetores)))
 
 
 def _vetores_ate(enc_usuario, enc_inicio, aval: pd.DataFrame, vet_obra: dict, n_gen: int) -> np.ndarray:
@@ -61,7 +66,7 @@ def _obras_em_comum(enc: pd.DataFrame, aval: pd.DataFrame, nota_fav: int) -> pd.
     return g.drop(columns="dif_media")
 
 
-def calcular(encontros: pd.DataFrame, avaliacoes: pd.DataFrame, obras: pd.DataFrame, cfg: dict) -> pd.DataFrame:
+def _categoria(encontros: pd.DataFrame, avaliacoes: pd.DataFrame, obras: pd.DataFrame, cfg: dict) -> pd.DataFrame:
     generos, vet = _matriz_generos(obras)
     va = _vetores_ate(encontros.usuario_a, encontros.inicio, avaliacoes, vet, len(generos))
     vb = _vetores_ate(encontros.usuario_b, encontros.inicio, avaliacoes, vet, len(generos))
@@ -71,7 +76,7 @@ def calcular(encontros: pd.DataFrame, avaliacoes: pd.DataFrame, obras: pd.DataFr
 
     def top3(v):  # máscara dos 3 gêneros de maior peso positivo
         m = np.zeros_like(v, dtype=bool)
-        idx = np.argsort(-v, axis=1)[:, :3]
+        idx = np.argsort(-v, axis=1, kind="stable")[:, :3]
         np.put_along_axis(m, idx, True, axis=1)
         return m & (v > 0)
 
@@ -90,4 +95,52 @@ def calcular(encontros: pd.DataFrame, avaliacoes: pd.DataFrame, obras: pd.DataFr
     out["compat_score"] = (p["peso_generos"] * (out.sim_generos + 1) / 2
                            + p["peso_notas"] * out.sim_notas.fillna(0.5)
                            + p["peso_favoritas"] * np.minimum(out.favoritas_comuns, 3) / 3).round(4)
+    return out
+
+
+def motivos_do_sinal(linha, cfg: dict) -> list[str]:
+    """Cada mídia precisa, sozinha, atingir o corte de afinidade do protótipo."""
+    corte = cfg["compat_score"]["afinidade_alta"]
+    return [m for m in MIDIAS if linha[f"match_{m}"] and linha[f"compat_score_{m}"] >= corte]
+
+
+def calcular(encontros: pd.DataFrame, avaliacoes: pd.DataFrame, obras: pd.DataFrame, cfg: dict) -> pd.DataFrame:
+    """Um encontro, cinco comparações independentes. Ausência de histórico não gera afinidade."""
+    out = encontros[["encontro_id"]].reset_index(drop=True).copy()
+    out["sim_generos"] = 0.0
+    out["generos_top3_comum"] = 0
+    out["n_obras_comuns"] = 0
+    out["favoritas_comuns"] = 0
+    soma_notas = np.zeros(len(out))
+    for midia in MIDIAS:
+        catalogo = obras[obras.midia == midia]
+        notas = avaliacoes[avaliacoes.obra_id.isin(catalogo.obra_id)]
+        historico = f"historico_comum_{midia}"
+        score = f"compat_score_{midia}"
+        match = f"match_{midia}"
+        if notas.empty:
+            out[historico], out[score], out[match] = 0, 0.0, 0
+            continue
+        por_usuario = notas.groupby("usuario_id").criado_em.min()
+        elegivel = ((encontros.usuario_a.map(por_usuario) < encontros.inicio)
+                    & (encontros.usuario_b.map(por_usuario) < encontros.inicio)).to_numpy()
+        out[historico] = elegivel.astype(int)
+        out[score], out[match] = 0.0, 0
+        if not elegivel.any():
+            continue
+        c = _categoria(encontros[elegivel], notas, catalogo, cfg).set_index("encontro_id")
+        c = c.reindex(out.encontro_id)
+        c.index = out.index
+        tem_genero = (c.generos_top3_comum > 0) & (c.sim_generos > 0)
+        combina = tem_genero | (c.favoritas_comuns > 0)
+        out[match] = combina.astype(int)
+        out[score] = c.compat_score.where(combina, 0.0)
+        out["sim_generos"] = np.maximum(out.sim_generos, c.sim_generos.fillna(0))
+        out["generos_top3_comum"] = np.maximum(out.generos_top3_comum, c.generos_top3_comum.fillna(0).astype(int))
+        comuns = c.n_obras_comuns.fillna(0).astype(int)
+        out["n_obras_comuns"] += comuns
+        out["favoritas_comuns"] += c.favoritas_comuns.fillna(0).astype(int)
+        soma_notas += c.sim_notas.fillna(0) * comuns
+    out["sim_notas"] = soma_notas / out.n_obras_comuns.replace(0, np.nan)
+    out["compat_score"] = out[[f"compat_score_{m}" for m in MIDIAS]].max(axis=1)
     return out

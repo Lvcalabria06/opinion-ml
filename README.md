@@ -1,5 +1,27 @@
 # OpiniOn — Ciência da Computação (Machine Learning)
 
+**Aviso de afinidade por categoria.** Ao detectar proximidade, a pulseira virtual
+publica `proximidade`. O backend consulta as avaliações anteriores e envia à pulseira
+publicadora uma mensagem com as mídias em que o par atingiu afinidade alta. Um encontro pode
+render um único aviso com música e filmes. A duração e o RSSI médio chegam ao fim do encontro.
+
+Para reproduzir o exemplo musical com o ambiente da opção B e o bootstrap versionado:
+
+```bash
+python -m opinion.pipeline.executar --fonte arquivos
+python -m opinion.modelo.comparar --midia musica
+python -m opinion.checkpoint2 --usuarios usr-00694 usr-01029
+```
+
+O treino por mídia usa os encontros em que ambos tinham avaliações daquela mídia, inclusive
+pares de baixa afinidade. O comando aceita também `filme`, `serie`, `jogo` e `livro`.
+As quatro famílias aprovadas estimam a interação em até 48 h. O aviso usa o corte
+`compat_score.afinidade_alta` de `config/pipeline.yaml`. O baseline acadêmico CC3
+segue acessível via `python -m opinion.checkpoint2 --retreinar`.
+O experimento atual usa `opinion-cc4-aviso-categoria-<mídia>` no MLflow.
+Os números das sprints abaixo descrevem versões anteriores.
+[Regra e resultados por mídia](docs/match_por_midia.md) · [Contrato da pulseira](docs/contrato_mqtt.md)
+
 > **A preencher pela equipe** (exigido pelo item 6 da especificação):
 > - **Nome da solução:** _a definir_
 > - **Membros:** _Nome Sobrenome (@usuario-github), …_

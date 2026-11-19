@@ -1,7 +1,7 @@
 """
 Serviço de ingestão (CC1): recebe as mensagens da pulseira pelo MQTT e grava no banco.
 
-Para cada mensagem em opinion/pulseira/+/encontro | interesse | status:
+Para cada mensagem em opinion/pulseira/+/proximidade | encontro | interesse | status:
   1. guarda a mensagem bruta em `mqtt_mensagens` (auditoria, inclusive as rejeitadas)
   2. valida contra o contrato (src/opinion/contrato.py)
   3. traduz os IDs anônimos e rotativos para o usuário real
@@ -25,6 +25,9 @@ import paho.mqtt.client as mqtt
 
 from opinion import contrato as C
 from opinion.db import Banco, agora
+from opinion.pipeline.compatibilidade import motivos_do_sinal
+from opinion.pipeline.executar import config
+from opinion.sinal_categoria import afinidades, feedback, perfil
 
 logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"), format="%(asctime)s [ingestao] %(message)s")
 log = logging.getLogger(__name__)
@@ -33,6 +36,7 @@ log = logging.getLogger(__name__)
 class Ingestao:
     def __init__(self, banco: Banco):
         self.banco = banco
+        self.politica = config()
         banco.criar_esquema()
         usuarios = banco.todos("SELECT usuario_id, pulseira_id FROM usuarios")
         if not usuarios:
@@ -48,8 +52,8 @@ class Ingestao:
         if rc != 0:
             log.error("Falha ao conectar no broker (%s)", rc)
             return
-        cliente.subscribe([(C.filtro(t), C.QOS) for t in ("encontro", "interesse", "status")])
-        log.info("Conectado em %s:%s — aguardando mensagens em %s/+/{encontro,interesse,status}",
+        cliente.subscribe([(C.filtro(t), C.QOS) for t in ("proximidade", "encontro", "interesse", "status")])
+        log.info("Conectado em %s:%s — aguardando mensagens em %s/+/{proximidade,encontro,interesse,status}",
                  C.BROKER_HOST, C.BROKER_PORTA, C.PREFIXO)
 
     # ----------------------------------------------------------------- mensagem
@@ -86,17 +90,49 @@ class Ingestao:
     def _usuario(self, token: str, quando: datetime) -> str | None:
         return self.tokens.resolver(token, quando)
 
+    def _avisar(self, pulseira, encontro_id, ua, ub, inicio):
+        perfis = []
+        for usuario in (ua, ub):
+            modo = self.banco.um("SELECT modo FROM status_pulseira WHERE usuario_id = ? AND ts <= ? "
+                                 "ORDER BY ts DESC LIMIT 1", (usuario, inicio))
+            if modo and modo[0] == "pausado":
+                return
+            notas = self.banco.todos("SELECT a.obra_id, o.midia, o.generos, a.nota FROM avaliacoes a "
+                                     "JOIN obras o ON o.obra_id = a.obra_id "
+                                     "WHERE a.usuario_id = ? AND a.criado_em < ?", (usuario, inicio))
+            perfis.append(perfil(notas))
+        midias = motivos_do_sinal(afinidades(*perfis, self.politica), self.politica)
+        if not midias:
+            return None
+        cur = self.banco.executar("INSERT INTO avisos_proximidade (encontro_id, pulseira_id, midias, inicio) "
+                                  "VALUES (?,?,?,?) ON CONFLICT DO NOTHING",
+                                  (encontro_id, pulseira, "|".join(midias), inicio))
+        if cur.rowcount == 0:
+            return "duplicada"
+        try:
+            payload = feedback(encontro_id, midias, agora())
+            envio = self.cliente.publish(C.topico(pulseira, "feedback"), json.dumps(payload, ensure_ascii=False),
+                                         qos=C.QOS)
+            if envio.rc != mqtt.MQTT_ERR_SUCCESS:
+                raise RuntimeError(f"Falha ao enfileirar feedback MQTT (rc={envio.rc})")
+        except Exception:
+            self.banco.executar("DELETE FROM avisos_proximidade WHERE encontro_id = ?", (encontro_id,))
+            raise
+        return None
+
     def gravar(self, tipo: str, pulseira: str, p: dict) -> str | None:
         if pulseira not in self.dono:
             return "pulseira não cadastrada"
 
-        if tipo == "encontro":
+        if tipo in ("proximidade", "encontro"):
             inicio = datetime.fromisoformat(p["inicio"])
             ua, ub = self._usuario(p["usuario_a"], inicio), self._usuario(p["usuario_b"], inicio)
             if ua is None or ub is None:
                 return "ID rotativo não reconhecido"
             if ua != self.dono[pulseira]:
                 return "usuario_a não é o dono da pulseira que publicou"
+            if tipo == "proximidade":
+                return self._avisar(pulseira, p["encontro_id"], ua, ub, inicio.isoformat())
             fim = inicio + timedelta(seconds=float(p["duracao_s"]))
             cur = self.banco.executar(
                 "INSERT INTO encontros (encontro_id, pulseira_id, token_a, token_b, usuario_a, usuario_b, inicio, fim, "

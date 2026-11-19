@@ -29,7 +29,7 @@ amazon2023:
     n_usuarios: 1200
     semente: 42
     min_avaliacoes_na_janela: 3     # ativo nas 38 semanas
-    min_midias: 2                   # avalia pelo menos 2 mídias diferentes (perfil OpiniOn)
+    min_midias: 1                   # perfis de uma única mídia também são elegíveis
     max_avaliacoes_por_usuario: 300 # as mais recentes até o fim da janela (limita usuários extremos)
     # cota por mídia dominante: evita que livro e filme (maioria na Amazon) apaguem jogos e música
     cota_midia_dominante: {livro: 0.30, filme: 0.40, jogo: 0.15, musica: 0.15}

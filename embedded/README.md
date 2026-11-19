@@ -5,10 +5,11 @@ Ela faz o papel do firmware: publica via **MQTT** o que uma pulseira física pub
 
 | Tópico | Quando |
 |---|---|
+| `opinion/pulseira/{id}/proximidade` | quando as pulseiras se detectam |
 | `opinion/pulseira/{id}/encontro` | ao fim de um encontro entre duas pulseiras |
 | `opinion/pulseira/{id}/interesse` | o usuário toca na pulseira |
 | `opinion/pulseira/{id}/status` | o usuário troca o modo (aberto, discreto, pausado) |
-| `opinion/pulseira/{id}/feedback` | o backend manda o sinal a emitir (a partir do CC7) |
+| `opinion/pulseira/{id}/feedback` | o backend manda o sinal a emitir |
 
 Os IDs dos usuários nas mensagens são anônimos e mudam todo dia. O formato completo está em
 [`docs/contrato_mqtt.md`](../docs/contrato_mqtt.md), e o código compartilhado com o backend

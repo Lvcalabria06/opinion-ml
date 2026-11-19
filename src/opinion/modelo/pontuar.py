@@ -16,7 +16,7 @@ from opinion import contrato as C
 from opinion.pipeline import compatibilidade, features, preparacao
 
 
-def carregar_modelo(cfg: dict):
+def carregar_modelo(cfg: dict, midia: str | None = None):
     """Modelo pelo alias do registry + o que o run de treino registrou (limiares, métricas)."""
     os.environ.setdefault("MLFLOW_DISABLE_AGENT_HINT", "1")
     import mlflow
@@ -25,12 +25,15 @@ def carregar_modelo(cfg: dict):
 
     mlflow.set_tracking_uri(cfg["mlflow"]["tracking_uri"])
     nome, alias = cfg["mlflow"]["modelo_registrado"], cfg["mlflow"]["alias"]
+    if midia is not None:
+        nome = f"{cfg['comparacao']['modelo_registrado']}-{midia}"
+        alias = cfg["comparacao"]["alias"]
     cliente = MlflowClient()
     versao = cliente.get_model_version_by_alias(nome, alias)
     run = cliente.get_run(versao.run_id)
     modelo = mlflow.sklearn.load_model(f"models:/{nome}@{alias}")
     info = {"uri": f"models:/{nome}@{alias}", "versao": versao.version, "run_id": versao.run_id,
-            "algoritmo": run.data.params.get("algoritmo"),
+            "algoritmo": run.data.params.get("algoritmo") or run.data.params.get("modelo"),
             "limiar": float(run.data.params["limiar"]), "limiar_regra": float(run.data.params["limiar_regra"]),
             "metricas": run.data.metrics}
     return modelo, info
@@ -76,4 +79,5 @@ def pontuar(encontro: dict, f, modelo, info: dict, cfg_pipeline: dict, colunas: 
             "usuario_b": encontro["usuario_b"], "inicio": str(encontro["inicio"]), "local": encontro["local"],
             "probabilidade": round(p, 4), "limiar": round(info["limiar"], 4), "sinal_modelo": p >= info["limiar"],
             "compat_score": float(linha.compat_score), "sinal_regra": float(linha.compat_score) >= info["limiar_regra"],
+            "midias_match": "|".join(m for m in compatibilidade.MIDIAS if linha[f"match_{m}"]),
             "algum_segue": int(linha.algum_segue), "modelo": f"{info['uri']} (v{info['versao']})", "_X": X}

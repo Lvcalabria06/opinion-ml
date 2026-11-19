@@ -7,8 +7,8 @@
 
 mlflow:
   tracking_uri: sqlite:///mlruns/mlflow.db   # banco do MLflow junto dos artefatos, em mlruns/
-  experimento: opinion-cc3
-  modelo_registrado: opinion-baseline-cc3
+  experimento: opinion-cc3-aviso-categoria
+  modelo_registrado: opinion-baseline-cc3-aviso-categoria
   alias: champion
 
 # Métrica de escolha (seção 4.5 / decisão D-006): PR-AUC entre desconhecidos.
@@ -44,8 +44,8 @@ limiar:
 # (Optuna) e validação cruzada/estabilidade é o CC6.
 # =====================================================================
 comparacao:
-  experimento: opinion-cc4
-  modelo_registrado: opinion-cc4-melhor     # ponto de partida do CC5
+  experimento: opinion-cc4-aviso-categoria
+  modelo_registrado: opinion-cc4-aviso-categoria
   alias: melhor
   referencia: regressao_logistica           # o baseline do CC3, contra quem as diferenças são medidas
   bootstrap: {n: 1000, semente: 0}          # intervalo de confiança das diferenças no teste

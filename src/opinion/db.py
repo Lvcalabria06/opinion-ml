@@ -73,6 +73,12 @@ CREATE TABLE IF NOT EXISTS mqtt_mensagens (
     erro        TEXT,
     recebido_em {TS}
 );
+CREATE TABLE IF NOT EXISTS avisos_proximidade (
+    encontro_id TEXT PRIMARY KEY,
+    pulseira_id TEXT NOT NULL,
+    midias TEXT NOT NULL,
+    inicio {TS} NOT NULL
+);
 CREATE TABLE IF NOT EXISTS encontros (
     encontro_id TEXT PRIMARY KEY,
     pulseira_id TEXT NOT NULL,
@@ -107,6 +113,7 @@ CREATE TABLE IF NOT EXISTS status_pulseira (
     recebido_em {TS},
     UNIQUE (pulseira_id, ts)
 );
+CREATE INDEX IF NOT EXISTS ix_status_usuario_ts ON status_pulseira(usuario_id, ts);
 """
 
 

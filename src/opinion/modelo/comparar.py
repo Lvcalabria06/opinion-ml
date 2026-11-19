@@ -31,6 +31,7 @@ from opinion.modelo import PASTA_PROCESSADOS
 from opinion.modelo.treinar import (_graficos, _metricas_planas, avaliar_candidato, avaliar_regra, candidatos,
                                     carregar, config, explicar, mascara_desconhecidos, medir_teste, no_limiar)
 from opinion.mundo import PASTA_BOOTSTRAP, RAIZ
+from opinion.pipeline.compatibilidade import MIDIAS
 
 DOC = RAIZ / "docs" / "comparacao_modelos.md"
 FIGURAS = RAIZ / "docs" / "img" / "cc4"
@@ -97,13 +98,32 @@ def teto(te: pd.DataFrame, desc, taxa_sinal: float) -> dict | None:
 
 
 # ======================================================================== comparação
+def recorte_midia(dm, meta, midia):
+    """Mesmo encontro e mesmo split, exigindo histórico bilateral apenas nesta mídia."""
+    df = dm.loc[dm[f"historico_comum_{midia}"] == 1].copy()
+    df["compat_score"] = df[f"compat_score_{midia}"]
+    gosto = set(meta["grupos_features"]["compatibilidade"])
+    cols = [c for c in meta["colunas_features"] if c not in gosto]
+    cols += ["compat_score", f"match_{midia}"]
+    return df, cols
+
+
 def comparar(pasta=PASTA_PROCESSADOS, cfg=None, registrar=True, doc: Path | None = DOC,
-             figuras: Path | None = FIGURAS) -> dict:
+             figuras: Path | None = FIGURAS, midia=None) -> dict:
     cfg = cfg or config()
     c = cfg["comparacao"]
     beta, chave = float(cfg["limiar"]["beta"]), cfg["metrica"]
     dm, meta = carregar(pasta)
     cols = meta["colunas_features"]
+    if midia is not None:
+        dm, cols = recorte_midia(dm, meta, midia)
+        c = {**c, "experimento": f"{c['experimento']}-{midia}",
+             "modelo_registrado": f"{c['modelo_registrado']}-{midia}"}
+        cfg = {**cfg, "comparacao": c}
+        meta = {**meta, "por_split": dm.groupby("split").agg(encontros=("split", "size"),
+                pares=("par_id", "nunique"), taxa_conexao=("conectou", "mean")).to_dict("index")}
+        # Relatório e figuras da categoria ficam no experimento correspondente.
+        doc = figuras = None
     tr, va, te = (dm[dm.split == s].copy() for s in ("treino", "validacao", "teste"))
     for nome, parte in (("treino", tr), ("validacao", va), ("teste", te)):
         if parte.empty:
@@ -147,7 +167,7 @@ def comparar(pasta=PASTA_PROCESSADOS, cfg=None, registrar=True, doc: Path | None
 
     resumo = {
         "gerado_em": datetime.now().isoformat(timespec="seconds"),
-        "protocolo": {"metrica_escolha": chave, "beta_limiar": beta, "referencia": ref,
+        "protocolo": {"midia": midia or "todas", "metrica_escolha": chave, "beta_limiar": beta, "referencia": ref,
                       "por_split": meta.get("por_split"), "n_features": len(cols)},
         "vencedor": vencedor,
         "familias": {k: {"tipo": f["tipo"], "params": f["params"], "limiar": f["limiar"],
@@ -170,7 +190,7 @@ def comparar(pasta=PASTA_PROCESSADOS, cfg=None, registrar=True, doc: Path | None
     if doc is not None:
         Path(doc).write_text(texto, encoding="utf-8")
     if registrar:
-        resumo.update(_registrar(resumo, figs, texto, cfg, pasta))
+        resumo.update(_registrar(resumo, figs, texto, cfg, tr[cols].head(5)))
     import matplotlib.pyplot as plt
     for fig in figs.values():
         plt.close(fig)
@@ -453,7 +473,7 @@ def analise(r: dict) -> list[str]:
 
 
 # ======================================================================== MLflow
-def _registrar(r: dict, figs: dict, texto: str, cfg: dict, pasta) -> dict:
+def _registrar(r: dict, figs: dict, texto: str, cfg: dict, exemplo) -> dict:
     import matplotlib.pyplot as plt
     import mlflow
     import mlflow.sklearn
@@ -466,9 +486,7 @@ def _registrar(r: dict, figs: dict, texto: str, cfg: dict, pasta) -> dict:
     c = cfg["comparacao"]
     mlflow.set_tracking_uri(cfg["mlflow"]["tracking_uri"])
     mlflow.set_experiment(c["experimento"])
-    dm, meta = carregar(pasta)
-    cols = meta["colunas_features"]
-    exemplo = dm[dm.split == "treino"][cols].head(5)
+    cols = list(exemplo.columns)
     fam, te, d, regra, ic = r["_familias"], r["_te"], r["_desc_te"], r["regra_simples"], r["bootstrap_teste_desconhecidos"]
     ref = r["protocolo"]["referencia"]
     info_venc = None
@@ -548,7 +566,7 @@ def _imprimir(r: dict) -> None:
     for t in analise(r):
         print(" -", t.replace("**", ""))
     if r.get("mlflow_run_pai"):
-        print(f"\nMLflow: experimento opinion-cc4, run {r['mlflow_run_pai']}  ·  melhor: {r['mlflow_modelo']} "
+        print(f"\nMLflow: run {r['mlflow_run_pai']}  ·  melhor: {r['mlflow_modelo']} "
               f"v{r['mlflow_versao']}")
 
 
@@ -556,10 +574,11 @@ def main():
     ap = argparse.ArgumentParser(description="CC4: compara 3+ modelos e registra no MLflow")
     ap.add_argument("--sem-registro", action="store_true", help="não grava no MLflow nem reescreve o doc")
     ap.add_argument("--pasta", default=str(PASTA_PROCESSADOS))
+    ap.add_argument("--midia", choices=MIDIAS, help="treina só com histórico bilateral nessa mídia")
     a = ap.parse_args()
     print("Comparando modelos (treino → escolha na validação → teste uma vez):")
-    if a.sem_registro:
-        r = comparar(a.pasta, registrar=False, doc=None, figuras=None)
+    if a.sem_registro or a.midia:
+        r = comparar(a.pasta, registrar=not a.sem_registro, doc=None, figuras=None, midia=a.midia)
     else:
         r = comparar(a.pasta)
         print(f"\nAnálise crítica em {DOC}")

@@ -5,10 +5,11 @@ Artefato compartilhado com o Design: o protótipo físico deve publicar exatamen
 
 | Tópico | Direção | QoS | Quando |
 |---|---|---|---|
+| `opinion/pulseira/{id}/proximidade` | pulseira → backend | 1 | ao detectar o início de um encontro |
 | `opinion/pulseira/{id}/encontro` | pulseira → backend | 1 | ao fim de um encontro |
 | `opinion/pulseira/{id}/interesse` | pulseira → backend | 1 | usuário toca na pulseira |
 | `opinion/pulseira/{id}/status` | pulseira → backend | 1 | usuário troca o modo de descoberta |
-| `opinion/pulseira/{id}/feedback` | backend → pulseira | 1 | sinal a emitir (a partir do CC7) |
+| `opinion/pulseira/{id}/feedback` | backend → pulseira | 1 | aviso por afinidade alta |
 
 `{id}` é o identificador da pulseira (`PUL-0001`). O backend sabe de quem é cada pulseira.
 
@@ -24,6 +25,12 @@ O token **muda todo dia**. É isso que uma pulseira anuncia por Bluetooth e o qu
 pulseira enxerga. Quem capturar as mensagens não descobre quem é a pessoa nem consegue
 segui-la de um dia para o outro. Só o backend, que tem o segredo (`OPINION_SEGREDO_TOKEN`),
 traduz o token para o usuário.
+
+## `proximidade`
+
+É publicada no início, com `v`, `encontro_id`, `usuario_a`, `usuario_b`, `inicio` e `local`.
+O id acompanha a mensagem final de encontro. Se qualquer participante estiver em modo
+pausado, o backend suprime o aviso.
 
 ## `encontro`
 
@@ -63,12 +70,14 @@ encontros**. O histórico de modos alimenta a taxa de silenciamento (seção 3.2
 ## `feedback` (proposta inicial — fechar com o Design)
 
 ```json
-{"v": 1, "encontro_id": "e-001042", "nivel": "periferico_leve", "padrao": "luz_suave", "ts": "2026-11-03T19:48:00"}
+{"v": 1, "encontro_id": "e-001042", "nivel": "periferico_leve", "padrao": "luz_suave",
+ "midias": ["musica"], "mensagem": "Alguém por perto tem alta afinidade com você em música.", "ts": "2026-11-03T19:42:10"}
 ```
 
 `nivel`: `nenhum`, `periferico_leve` ou `periferico_perceptivel` (faixas da seção 4.5).
-`padrao` é definido pelo Design. No Sprint 1 a pulseira virtual já escuta esse tópico, mas o
-backend ainda não envia nada: isso começa no CC7.
+`midias` contém todas as categorias que atingiram o corte. A mensagem vai para o tópico
+da pulseira publicadora. O backend registra o id do encontro para evitar repetir o aviso
+em reentregas da detecção. O padrão físico de luz segue em validação com Design.
 
 ## O que o serviço de ingestão faz com cada mensagem
 

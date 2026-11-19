@@ -112,13 +112,13 @@ modos_descoberta:                # status da pulseira (seção 3.3)
 
 # ------------------------------------------------- processo do label
 # Probabilidade de o encontro CAUSAR uma conexão (logística + ruído):
-#   z = intercepto + compat*compat_latente_z + abertura*(abert_a*abert_b)
+#   Após um aviso por afinidade alta: z = intercepto + compat + abertura*(abert_a*abert_b)
 #       + duracao*log(duracao/120) + contexto[local] + repeticao*min(encontros_anteriores, 5)
 #       + discreto*(algum em modo discreto) + N(0, ruido)
-# compat_latente_z (cosseno dos gostos, padronizado) e abertura são OCULTAS: o modelo só vê aproximações (notas, atividade...).
+# Sem aviso, ainda há interações espontâneas pelo feed. A resposta ao aviso é simulada.
 conexao:
   intercepto: -3.9
-  compat: 1.0                    # por desvio-padrão de compatibilidade latente
+  compat: 1.0                    # contribuição hipotética do aviso nos log-odds
   abertura: 2.2
   duracao: 0.35
   repeticao: 0.25

@@ -2,10 +2,11 @@
 Contrato de mensagens MQTT da pulseira (seção 4.2 do documento do projeto).
 
 Tópicos
-  opinion/pulseira/{id}/encontro    pulseira -> backend   encontro detectado
+  opinion/pulseira/{id}/proximidade pulseira -> backend   proximidade detectada
+  opinion/pulseira/{id}/encontro    pulseira -> backend   encontro encerrado
   opinion/pulseira/{id}/interesse   pulseira -> backend   toque do usuário
   opinion/pulseira/{id}/status      pulseira -> backend   modo de descoberta
-  opinion/pulseira/{id}/feedback    backend  -> pulseira  sinal a emitir (usado a partir do CC7)
+  opinion/pulseira/{id}/feedback    backend  -> pulseira  sinal a emitir
 
 IDs de usuário nas mensagens são ANÔNIMOS E ROTATIVOS: mudam todo dia e só o
 backend (que conhece o segredo) consegue saber quem é quem.
@@ -80,7 +81,7 @@ def validar(tipo: str, p: dict) -> str | None:
         return "payload não é um objeto JSON"
     if p.get("v") != VERSAO:
         return f"versão ausente ou não suportada: {p.get('v')}"
-    if tipo == "encontro":
+    if tipo in ("encontro", "proximidade"):
         for c in ("encontro_id", "usuario_a", "usuario_b", "inicio", "local"):
             if not isinstance(p.get(c), str) or not p[c]:
                 return f"campo ausente ou inválido: {c}"
@@ -88,12 +89,14 @@ def validar(tipo: str, p: dict) -> str | None:
             return "usuario_a igual a usuario_b"
         if _ts(p["inicio"]) is None:
             return "inicio não é data/hora ISO-8601"
+        if p["local"] not in LOCAIS:
+            return f"local desconhecido: {p['local']}"
+        if tipo == "proximidade":
+            return None
         if not isinstance(p.get("duracao_s"), (int, float)) or isinstance(p.get("duracao_s"), bool) or p["duracao_s"] <= 0:
             return "duracao_s ausente ou inválida"
         if not isinstance(p.get("rssi_medio"), (int, float)) or not -110 <= p["rssi_medio"] <= 0:
             return "rssi_medio ausente ou fora da faixa (-110 a 0 dBm)"
-        if p["local"] not in LOCAIS:
-            return f"local desconhecido: {p['local']}"
     elif tipo == "interesse":
         for c in ("encontro_id", "usuario", "ts"):
             if not isinstance(p.get(c), str) or not p[c]:

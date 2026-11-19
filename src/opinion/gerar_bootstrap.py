@@ -24,6 +24,7 @@ import argparse
 import bisect
 import json
 import math
+from functools import lru_cache
 from collections import defaultdict
 from datetime import datetime, timedelta
 from itertools import combinations
@@ -33,6 +34,9 @@ import numpy as np
 import pandas as pd
 
 from opinion.contrato import token_do_dia
+from opinion.pipeline.executar import config as config_pipeline
+from opinion.pipeline.compatibilidade import motivos_do_sinal
+from opinion.sinal_categoria import afinidades, perfil
 from opinion.mundo import GENEROS, PASTA_BOOTSTRAP, CONFIG_PADRAO, RAIZ, atributos_encontro, carregar_config, sigmoide
 
 TIPOS_INTERACAO = ["abrir_perfil", "seguir", "curtir_review", "comentar_review", "salvar_obra"]
@@ -68,15 +72,11 @@ class Simulador:
         self.fonte = cfg.get("usuarios", {}).get("fonte", "sintetico")
         self.reais = carregar_reais(cfg["usuarios"]["pasta"]) if self.fonte != "sintetico" else None
         self.n = len(self.reais["usuarios"]) if self.reais else s["n_usuarios"]
-        self.generos = GENEROS
 
     # ================================================================ catálogo
     def gerar_obras(self):
         if self.reais:
             self.obras = self.reais["obras"][["obra_id", "titulo", "midia", "generos", "popularidade"]].copy()
-            self.generos = sorted({g for gs in self.obras.generos for g in gs.split("|")})
-            self.obra_vet = {o: np.isin(self.generos, gs.split("|")).astype(float)
-                             for o, gs in zip(self.obras.obra_id, self.obras.generos)}
             return
         rng, n = self.rng, self.cfg["simulacao"]["n_obras"]
         midias = rng.choice(["filme", "serie", "jogo", "livro", "musica"], size=n, p=[0.3, 0.25, 0.2, 0.15, 0.1])
@@ -94,7 +94,7 @@ class Simulador:
 
     # ================================================================ usuários
     def _perfil_real(self):
-        """Persona, atividade e gosto a partir das avaliações reais de cada pessoa."""
+        """Persona e atividade a partir das avaliações reais de cada pessoa."""
         P, av = self.cfg["personas"], self.reais["avaliacoes"]
         idx = {u: i for i, u in enumerate(self.uid)}
         midia_obra = dict(zip(self.obras.obra_id, self.obras.midia))
@@ -111,13 +111,6 @@ class Simulador:
         recentes = av[av.criado_em >= self.fim - timedelta(weeks=semanas)]
         self.atividade = np.maximum(np.bincount(recentes.usuario_id.map(idx), minlength=self.n) / semanas, 0.05)
 
-        peso = np.clip(av.nota.to_numpy() - 2.0, 0, None)            # 1–2 estrelas não puxam o gosto
-        vet = np.stack([self.obra_vet[o] for o in av.obra_id])
-        vet = vet / vet.sum(1, keepdims=True)
-        self.gosto = np.zeros((self.n, len(self.generos)))
-        np.add.at(self.gosto, ui, vet * peso[:, None])
-        self.gosto += 1e-6
-
     def gerar_usuarios(self):
         rng, P = self.rng, self.cfg["personas"]
         if self.reais:
@@ -131,12 +124,6 @@ class Simulador:
             self.atividade = np.array([P[p]["avaliacoes_semana"] for p in self.persona]) * rng.lognormal(0, 0.4, self.n)
             self.gosto = rng.dirichlet(np.full(len(GENEROS), 0.6), self.n)
         self.abertura = np.array([rng.beta(*P[p]["abertura_social"]) for p in self.persona])
-        normas = np.linalg.norm(self.gosto, axis=1, keepdims=True)
-        self.gosto_unit = self.gosto / normas
-        # média da compatibilidade latente entre pares aleatórios (para centralizar o efeito)
-        i, j = rng.integers(0, self.n, 5000), rng.integers(0, self.n, 5000)
-        c = (self.gosto_unit[i] * self.gosto_unit[j]).sum(1)
-        self.compat_media, self.compat_dp = float(c.mean()), float(c.std())
 
         if self.reais:
             primeira = pd.to_datetime(self.reais["usuarios"].primeira_avaliacao)
@@ -146,9 +133,21 @@ class Simulador:
         self.usuarios = pd.DataFrame({"usuario_id": self.uid, "pulseira_id": [f"PUL-{i+1:04d}" for i in range(self.n)],
                                       "data_cadastro": cadastro})
 
-    def compat_latente(self, a: int, b: int) -> float:
-        """Compatibilidade "verdadeira" padronizada (0 = média da população)."""
-        return (float(self.gosto_unit[a] @ self.gosto_unit[b]) - self.compat_media) / self.compat_dp
+    def perfis_temporais(self):
+        notas = self.avaliacoes.merge(self.obras[["obra_id", "midia", "generos"]], on="obra_id",
+                                      validate="many_to_one").sort_values("criado_em")
+        datas, linhas = {}, {}
+        for usuario, g in notas.groupby("usuario_id"):
+            datas[usuario] = g.criado_em.tolist()
+            linhas[usuario] = list(g[["obra_id", "midia", "generos", "nota"]].itertuples(index=False, name=None))
+
+        @lru_cache(maxsize=4096)
+        def historico(usuario, quantidade):
+            return perfil(linhas.get(usuario, [])[:quantidade])
+
+        def antes(usuario, t):
+            return historico(usuario, bisect.bisect_left(datas.get(usuario, []), t))
+        return antes
 
     # ================================================================ amigos e seguidores
     def gerar_rede(self):
@@ -302,6 +301,8 @@ class Simulador:
     def simular(self):
         rng, L, A, C = self.rng, self.cfg["locais"], self.cfg["amigos"], self.cfg["conexao"]
         T = self.cfg["toque_interesse"]
+        antes = self.perfis_temporais()
+        politica = config_pipeline()
         self.encontros, self.toques, self.interacoes, self.ocultos = [], [], [], []
         n_anteriores: dict[tuple[int, int], int] = defaultdict(int)
         seq = 0
@@ -341,12 +342,14 @@ class Simulador:
                     # ------------------------------------------ processo do label (oculto)
                     seguem_mutuo = (a, b) in self.segue and (b, a) in self.segue
                     discreto = "discreto" in (self.modo_em(a, inicio), self.modo_em(b, inicio))
-                    z = (C["intercepto"] + C["compat"] * self.compat_latente(a, b)
+                    scores = afinidades(antes(self.uid[a], inicio), antes(self.uid[b], inicio), politica)
+                    midias = motivos_do_sinal(scores, politica)
+                    z = (C["intercepto"] + C["compat"] * bool(midias)
                          + C["abertura"] * self.abertura[a] * self.abertura[b]
                          + C["duracao"] * math.log(dur / 120) + C["contexto"][ctx]
                          + C["repeticao"] * min(anteriores, 5) + (C["discreto"] if discreto else 0.0)
                          + rng.normal(0, C["ruido"]))
-                    p = sigmoide(z)
+                    p = sigmoide(z) if midias and not seguem_mutuo else 0.
                     causou = (not seguem_mutuo) and rng.random() < p
                     if causou:
                         self._interacoes_de_conexao(a, b, fim, eid)
@@ -358,7 +361,7 @@ class Simulador:
                     self.ocultos.append({
                         "encontro_id": eid, "usuario_publicou": self.uid[pub], "usuario_outro": self.uid[outro],
                         "amigos": int(amigos), "ja_se_seguiam_mutuamente": int(seguem_mutuo),
-                        "compat_latente_z": round(self.compat_latente(a, b), 4),
+                        "midias_sinalizadas": "|".join(midias),
                         "abertura_publicou": round(float(self.abertura[pub]), 4),
                         "abertura_outro": round(float(self.abertura[outro]), 4),
                         "p_conexao_latente": round(p, 5), "conexao_causada_pelo_encontro": int(causou),

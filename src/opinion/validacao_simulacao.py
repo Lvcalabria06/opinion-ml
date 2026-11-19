@@ -270,14 +270,14 @@ def escrever_doc(cfg, sanidade, resultados, cenarios, segundos):
         L.append(f"| `{caminho}` | {_valor(cfg, caminho)} | {porque} | {validar} |")
 
     L += ["", "### Como o label é gerado", "",
-          "Para cada encontro, a chance de virar conexão é", "",
-          "```", "p = sigmoide( intercepto + compat·compatibilidade_latente + abertura·(abertura_A × abertura_B)",
+          "Após um aviso por categoria entre pessoas que ainda não se seguem mutuamente, a chance simulada de conexão é", "",
+          "```", "p = sigmoide( intercepto + compat + abertura·(abertura_A × abertura_B)",
           "               + duracao·log(duração/120 s) + efeito_do_local + repeticao·min(encontros anteriores, 5)",
           "               + discreto·[alguém em modo discreto] + ruído )", "```", "",
           "Se sorteado, um dos dois interage com o outro no app depois de um atraso aleatório. O label do pipeline "
           "(interação em até 48 h) é calculado depois, a partir das interações — que também incluem interações entre "
-          "amigos e do feed. A *compatibilidade latente* e a *abertura social* são ocultas: o modelo só vê "
-          "aproximações (similaridade de notas, atividade, conexões).", ""]
+          "amigos e do feed. A abertura social é oculta. As features incluem "
+          "similaridade de notas na mídia, atividade e conexões.", ""]
 
     L += ["## 2. Checagens de sanidade (cenário base)", "",
           "| Status | Checagem | Valor | Faixa plausível | Por quê |", "|---|---|---|---|---|"]

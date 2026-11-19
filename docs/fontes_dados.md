@@ -33,9 +33,15 @@ e música, com nota 1–5 e data. Isso é o perfil de gosto que o OpiniOn precis
 | Video_Games | `jogo` (só a categoria Games; acessórios fora) | 0,8 M |
 | CDs_and_Vinyl | `musica` | 1,6 M |
 
-Há 14.589 usuários elegíveis na janela (ativos, ≥2 mídias). Desses, **1.200** entram no
+Na extração versionada havia 14.589 usuários elegíveis na janela (ativos, ≥2 mídias). Desses, **1.200** entraram no
 projeto (semente 42), com cota por mídia dominante. Amostra versionada: 48.018 obras e
 58.251 avaliações reais (`data/reais/amazon2023/fonte.json`).
+
+Novas extrações aceitam uma única mídia (`min_midias: 1`). A cota total continua ajustável
+em `n_usuarios`. O bootstrap versionado permite comparar as duas formas de cruzamento
+nos mesmos encontros, antes de trocar a população. Para incorporar outra fonte, cada
+avaliação precisa de usuário, obra, nota e data, e cada obra de mídia e gêneros.
+Identificadores de fontes independentes precisam de prefixos próprios.
 
 Cerca de 1/3 das obras cai em `outros_<midia>` (a Amazon não tinha categoria que
 mapeasse para os gêneros do OpiniOn). A compatibilidade ainda usa a mídia e as que

@@ -91,7 +91,31 @@ Features, todas calculadas com dados de **antes do início** do encontro:
 | Relação | algum_segue, seguem_mutuamente, interacoes_anteriores_par, interagiram_antes |
 
 `_min`/`_max`: como "usuário A" e "usuário B" é uma ordem arbitrária, guardamos o menor e o maior valor dos dois.
-`compat_score` é a pontuação usada pela regra simples de referência (pesos em `config/pipeline.yaml`).
+`historico_comum_<midia>` indica que ambos avaliaram pelo menos uma obra daquela mídia antes do início do encontro.
+Em cada mídia, o perfil de gosto soma `nota - 3` por gênero conhecido. `match_<midia>` vale 1
+quando os vetores têm cosseno positivo e os dois compartilham um dos seus três gêneros de maior peso
+positivo, ou quando ambos deram nota de favorita à mesma obra. Rótulos genéricos como
+`outros_filme` não contam como gênero. Dois filmes diferentes podem sustentar um match.
+
+`compat_score_<midia>` vale zero sem match. Havendo match, combina cosseno reescalado,
+concordância de notas nas mesmas obras (0,5 na ausência delas) e favoritas em comum
+(saturação em três), com os pesos de `config/pipeline.yaml`. A regra simples usa o maior desses
+cinco scores como `compat_score`. Os modelos recebem os cinco scores e seus indicadores.
+As contagens de obras e favoritas em comum somam as mídias, a concordância de notas é
+ponderada pelo número de obras comuns e os resumos de gêneros usam o maior valor por mídia
+(similaridade resumida limitada inferiormente a zero).
+
+`midias_match` na previsão lista todas as mídias que satisfizeram o critério, separadas por
+`|`. O sinal usa a probabilidade do modelo e o limiar ajustado na validação. O rótulo
+`conectou` continua sendo observado uma única vez por encontro, inclusive para pares sem match.
 
 `features_encontros.parquet`: os mesmos dados para **todos** os encontros, inclusive os que ainda aguardam
 as 48 h (`label_disponivel = 0`) e os removidos na fronteira (`split = purgado`).
+
+## Avisos na proximidade
+
+A tabela operacional `avisos_proximidade` registra `encontro_id`, `pulseira_id`, `inicio`
+e `midias` (separadas por `|`) para deduplicar o envio. Esse registro identifica a solicitação
+de aviso. A confirmação de que uma pessoa percebeu o sinal exigiria medição na pulseira.
+O arquivo oculto `encontros_ocultos.csv` contém `midias_sinalizadas` para conferir a regra
+na simulação. O checkpoint grava suas demonstrações locais em `data/processed/avisos_categoria.csv`.
