@@ -3,6 +3,7 @@
 # =====================================================================
 
 label:
+  tipo: amizade                    # amizade (Last.fm: par e amigo na rede) | interacao_48h (comportamento original)
   janela_horas: 48                 # conectou = 1 se houve interação em até 48 h após o fim
   tipos_interacao:                 # o que conta como "interação" entre os dois
     - seguir
@@ -13,16 +14,22 @@ label:
 
 # Split temporal (seção 4.5). Datas de INÍCIO do encontro, intervalos [inicio, fim).
 split:
+  tipo: pares                       # pares (70/15/15 por par, sem misturar) | temporal (semanas abaixo)
+  proporcoes: {treino: 0.70, validacao: 0.15, teste: 0.15}
+  semente: 7
+  # Datas abaixo: usadas no split temporal e para numerar a semana do encontro.
   treino:    ["2026-07-06", "2026-08-31"]   # semanas 1–8
   validacao: ["2026-08-31", "2026-09-14"]   # semanas 9–10
   teste:     ["2026-09-14", "2026-09-28"]   # semanas 11–12
   # Encontros do treino cuja janela de 48 h do label invade a validação são removidos
   # do treino ("purga"): no fim da semana 8 esses rótulos ainda não seriam conhecidos.
-  purgar_fronteira: true
+  purgar_fronteira: true            # so vale no split temporal
 
 features:
   janela_atividade_dias: 28        # "nível de atividade" = avaliações nos últimos 28 dias
   nota_favorita: 4                 # nota >= 4 conta como obra favorita
+  excluir: [algum_segue, seguem_mutuamente, interacoes_anteriores_par, interagiram_antes, conexoes_min, conexoes_max]
+  # excluir: com rotulo = amizade, a rede social seria o proprio rotulo (vazamento); fica fora do modelo.
 
 # Pontuação de compatibilidade usada pela REGRA SIMPLES de referência (seção 4.5):
 # "emitir sinal quando a compatibilidade passa de um limite".
@@ -33,6 +40,6 @@ compat_score:
   peso_favoritas: 0.15             # favoritas em comum (satura em 3)
 
 qualidade:                          # a DAG falha se algo sair destas faixas
-  taxa_conexao_min: 0.02
+  taxa_conexao_min: 0.002
   taxa_conexao_max: 0.40
   min_encontros_por_split: 500

@@ -89,3 +89,38 @@ com `fonte.json` descrevendo o filtro). Sem a amostra, o simulador recusa rodar.
 Quem avalia na Amazon não é exatamente o público do OpiniOn. O gosto é real; a chance de
 dois se encontrarem e conectarem no app continua sendo a simulação. Qualquer métrica do
 modelo ainda mede essa mistura, não usuários reais da pulseira.
+
+---
+
+## Experimento: Last.fm (branch `experimento-lastfm`)
+
+Nesta branch os usuários, as obras, as avaliações e as **amizades** vêm do Last.fm, no lugar da Amazon.
+
+**Fonte:** HetRec 2011 Last.fm (`hetrec2011-lastfm-2k`), GroupLens:
+<https://grouplens.org/datasets/hetrec-2011/>. São 1.892 usuários, 17.632 artistas, 92.834 pares
+usuário–artista (contagem de escutas) e 12.717 amizades bidirecionais.
+
+**Licença:** uso não comercial. Cite o site do Last.fm (<http://www.lastfm.com>) e Cantador, Brusilovsky,
+Kuflik, *2nd Workshop on Information Heterogeneity and Fusion in Recommender Systems (HetRec 2011)*,
+RecSys 2011.
+
+**Arquivos:** os brutos ficam em `data/externo/lastfm/` (fora do Git). As tabelas derivadas saem em
+`data/reais/lastfm/` com `python -m opinion.fontes.lastfm`.
+
+**Transformações:**
+- artista = obra (mídia `musica`);
+- nota 1–5 pelos quintis das escutas de cada usuário (`escutas` guarda a contagem original);
+- gêneros = as tags mais usadas do artista (≥2 usos, até 3), mapeadas por `generos` em
+  `config/fontes.yaml`; sem correspondência, `outros_musica`;
+- avaliações datadas em 2026-06-01 (perfil anterior à simulação); as datas das tags não são usadas
+  (anos inválidos).
+
+**Real e simulado nesta branch:**
+
+| Real | Simulado |
+|---|---|
+| usuários, artistas, escutas, gêneros, amizades | encontros (independentes da amizade), interações no app, pulseira |
+
+O label é a amizade real (estática, sem data). Limitações: sem datas de amizade não há split temporal
+e pode haver causalidade reversa (amigos influenciam o gosto um do outro); só ~1,9 mil usuários;
+licença não comercial. Decisão e resultados: [D-014 (Last.fm)](decisoes.md) e [`status.md`](status.md).

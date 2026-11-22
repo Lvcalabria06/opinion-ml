@@ -31,7 +31,7 @@ from sklearn.tree import DecisionTreeClassifier
 
 from opinion.gerar_bootstrap import Simulador
 from opinion.mundo import RAIZ, carregar_config
-from opinion.pipeline.executar import rodar_tudo
+from opinion.pipeline.executar import config as config_pipeline, rodar_tudo
 from opinion.pipeline.tempo import ultimo_valor
 
 PASTA = RAIZ / "data" / "validacao"
@@ -169,28 +169,48 @@ def avaliar(pasta: Path) -> dict:
 
 
 # -------------------------------------------------------------------- sanidade
-def checagens(pasta: Path, cfg: dict) -> list[dict]:
+def modo_amizade() -> bool:
+    return config_pipeline()["label"].get("tipo") == "amizade"
+
+
+def checagens(pasta: Path, cfg: dict, amizade: bool = False) -> list[dict]:
     boot, proc, stg = pasta / "bootstrap", pasta / "processed", pasta / "staging"
     f = pd.read_parquet(proc / "features_encontros.parquet")
     f["duracao_min"] = f.duracao_s / 60
-    oc = pd.read_csv(boot / "verdade_simulacao_NAO_USAR_COMO_FEATURE" / "encontros_ocultos.csv")
     st = pd.read_parquet(stg / "status.parquet")
-    it = pd.read_parquet(stg / "interesses.parquet")
-    n_usuarios = cfg["simulacao"]["n_usuarios"]
+    n_usuarios = len(pd.read_parquet(stg / "usuarios.parquet")) if amizade else cfg["simulacao"]["n_usuarios"]
     C = []
 
     def chk(nome, valor, ok, faixa, porque, atencao=False):
         C.append({"checagem": nome, "valor": valor, "faixa": faixa,
                   "status": "OK" if ok else ("ATENÇÃO" if atencao else "FALHA"), "por_que": porque})
 
-    t = f.conectou.mean()
-    chk("Taxa geral de conexão", f"{t:.1%}", 0.05 <= t <= 0.25, "5%–25%",
-        "Problema desbalanceado, mas com positivos suficientes para treinar (seção 4.3).")
-    ta, td = f[f.algum_segue == 1].conectou.mean(), f[f.algum_segue == 0].conectou.mean()
-    chk("Desconhecidos conectam menos que quem já se segue", f"{td:.1%} x {ta:.1%}", td < ta, "desconhecidos < amigos",
-        "Amigos interagem no app de qualquer jeito.")
-    chk("Desconhecidos: taxa de conexão", f"{td:.1%}", 0.02 <= td <= 0.15, "2%–15%",
-        "Abordagem entre estranhos é rara; acima de 15% seria otimista demais.")
+    if amizade:
+        # Independência: encontros simulados sem olhar a amizade => a fração de pares amigos entre os pares
+        # que se encontraram deve ser parecida com a densidade de amizade da população.
+        seg = pd.read_parquet(stg / "seguidores.parquet")
+        amizades = {tuple(sorted(x)) for x in zip(seg.seguidor.astype(str), seg.seguido.astype(str))}
+        dens = len(amizades) / (n_usuarios * (n_usuarios - 1) / 2)
+        pares = f.groupby("par_id").conectou.max()
+        frac = pares.mean()
+        chk("Amigos entre os pares que se encontraram ~ densidade da população (independência)",
+            f"{frac:.2%} x {dens:.2%} (razão {frac / dens:.2f})", 0.85 <= frac / dens <= 1.15, "razão entre 0,85 e 1,15",
+            "Os encontros são simulados sem olhar a amizade; se a fração fosse muito diferente da densidade, o "
+            "simulador estaria vazando amizade para o encontro (ou o contrário). Faixa de ±15%: com ~1,2 mil pares de "
+            "amigos entre os pares que se encontraram, o desvio amostral esperado da razão é ~3%, então 15% já "
+            "são ~5 desvios.")
+        t = f.conectou.mean()
+        chk("Taxa geral de positivos (encontros)", f"{t:.2%}", 0.002 <= t <= 0.40, "0,2%–40% (faixa da DAG)",
+            "Desbalanceado como a rede de amizades da população; precisa de positivos suficientes por parte do split.")
+    else:
+        t = f.conectou.mean()
+        chk("Taxa geral de conexão", f"{t:.1%}", 0.05 <= t <= 0.25, "5%–25%",
+            "Problema desbalanceado, mas com positivos suficientes para treinar (seção 4.3).")
+        ta, td = f[f.algum_segue == 1].conectou.mean(), f[f.algum_segue == 0].conectou.mean()
+        chk("Desconhecidos conectam menos que quem já se segue", f"{td:.1%} x {ta:.1%}", td < ta, "desconhecidos < amigos",
+            "Amigos interagem no app de qualquer jeito.")
+        chk("Desconhecidos: taxa de conexão", f"{td:.1%}", 0.02 <= td <= 0.15, "2%–15%",
+            "Abordagem entre estranhos é rara; acima de 15% seria otimista demais.")
     med = f.groupby("local").duracao_min.median()
     chk("Duração mediana por local", ", ".join(f"{k} {v:.1f} min" for k, v in med.items()),
         bool(med.between(1, 30).all()), "1–30 min em todos",
@@ -221,23 +241,32 @@ def checagens(pasta: Path, cfg: dict) -> list[dict]:
         "Modo pausado = pulseira não anuncia (seção 3.3).")
     sem = f.groupby("semana").conectou.mean()
     chk("Estabilidade semanal da taxa de conexão", f"desvio {sem.std() * 100:.1f} p.p.", sem.std() <= 0.015,
-        "<= 1,5 p.p.", "Sem mudança brusca entre treino/validação/teste — o split temporal mede o modelo, não a base.")
+        "<= 1,5 p.p.", "Sem mudança brusca ao longo das semanas — a taxa estável indica que a divisão por pares mede o modelo, não uma deriva da base.")
     rep = 1 - f.primeiro_encontro_par.mean()
-    chk("Encontros repetidos do mesmo par", f"{rep:.1%}", 0.10 <= rep <= 0.60, "10%–60%",
-        "Necessário para a feature de encontros anteriores e o k-fold agrupado por par.")
-    causadas = oc[oc.conexao_causada_pelo_encontro == 1].merge(f[["encontro_id", "conectou"]], on="encontro_id")
-    fora = 1 - causadas.conectou.mean()
-    chk("Conexões causadas que só aparecem depois de 48 h", f"{fora:.1%}", 0.01 <= fora <= 0.15, "1%–15%",
-        "A janela de 48 h perde algumas conexões tardias, como na vida real.")
-    tocou = f.encontro_id.isin(it.encontro_id)
-    tc, tn = tocou[f.conectou == 1].mean(), tocou[f.conectou == 0].mean()
-    chk("Toque mais frequente quando há conexão", f"{tc:.1%} x {tn:.1%}", tc > tn, "conectou > não conectou",
-        "O toque deve carregar algum sinal de interesse.")
-    d = f[f.algum_segue == 0]
-    auc_rssi = roc_auc_score(d.conectou, d.rssi_medio)
-    chk("Proximidade (RSSI) influencia conexão entre desconhecidos", f"AUC {auc_rssi:.3f}", auc_rssi >= 0.52,
-        "AUC >= 0,52", "Esperado no mundo real (quem conversa fica mais perto). Na simulação o RSSI não entra no "
-        "processo do label — premissa a revisar.", atencao=True)
+    if amizade:
+        chk("Encontros repetidos do mesmo par", f"{rep:.1%}", 0.02 <= rep <= 0.60, "2%–60%",
+            "Com o split por par a repetição não vaza entre treino e teste; só alimenta a feature de encontros "
+            "anteriores. Faixa mais baixa que a do rótulo simulado (10%) porque com ~1,9 mil usuários os pares são "
+            "muitos e raros de repetir.")
+    else:
+        chk("Encontros repetidos do mesmo par", f"{rep:.1%}", 0.10 <= rep <= 0.60, "10%–60%",
+            "Necessário para a feature de encontros anteriores e o k-fold agrupado por par.")
+    if not amizade:
+        oc = pd.read_csv(boot / "verdade_simulacao_NAO_USAR_COMO_FEATURE" / "encontros_ocultos.csv")
+        it = pd.read_parquet(stg / "interesses.parquet")
+        causadas = oc[oc.conexao_causada_pelo_encontro == 1].merge(f[["encontro_id", "conectou"]], on="encontro_id")
+        fora = 1 - causadas.conectou.mean()
+        chk("Conexões causadas que só aparecem depois de 48 h", f"{fora:.1%}", 0.01 <= fora <= 0.15, "1%–15%",
+            "A janela de 48 h perde algumas conexões tardias, como na vida real.")
+        tocou = f.encontro_id.isin(it.encontro_id)
+        tc, tn = tocou[f.conectou == 1].mean(), tocou[f.conectou == 0].mean()
+        chk("Toque mais frequente quando há conexão", f"{tc:.1%} x {tn:.1%}", tc > tn, "conectou > não conectou",
+            "O toque deve carregar algum sinal de interesse.")
+        d = f[f.algum_segue == 0]
+        auc_rssi = roc_auc_score(d.conectou, d.rssi_medio)
+        chk("Proximidade (RSSI) influencia conexão entre desconhecidos", f"AUC {auc_rssi:.3f}", auc_rssi >= 0.52,
+            "AUC >= 0,52", "Esperado no mundo real (quem conversa fica mais perto). Na simulação o RSSI não entra no "
+            "processo do label — premissa a revisar.", atencao=True)
     return C
 
 
@@ -401,7 +430,71 @@ def conclusoes(res: dict) -> list[dict]:
     return out
 
 
+PREMISSAS_AMIZADE = [
+    ("personas.*.peso", "Mistura provisória de perfis de público cultural/universitário; só decide onde cada usuário "
+     "circula (o gosto musical vem do Last.fm).", "Trocar pelas personas do Design."),
+    ("personas.*.visitas_semana", "Frequência plausível por tipo de local, mantida nos valores originais da simulação.", "Pergunta da coleta complementar (seção 3.1)."),
+    ("locais.*.p_encontro", "Chance de dois desconhecidos no mesmo lugar e turno ficarem a menos de ~2 m por tempo "
+     "suficiente. No experimento foi multiplicada por 3 (valores originais 0,10/0,25/0,03/0,015) para haver "
+     "amigos encontrados suficientes (positivos).", "Encontros por hora nos testes reais."),
+    ("locais.*.duracao_mediana_s", "Fila de cinema ~5 min, livraria ~3 min, campus ~2 min, estande de convenção ~6 min.",
+     "Distribuição de duração dos encontros reais."),
+    ("locais.convencao_games.semanas_com_evento", "Eventos esporádicos; criam picos que testam a estabilidade no tempo.", "—"),
+    ("modos_descoberta.inicial", "Maioria aberta ou discreta; ~10% pausada (privacidade).", "Modos escolhidos nos testes."),
+]
+
+
+def escrever_doc_amizade(cfg, sanidade, segundos):
+    n_ok = sum(c["status"] == "OK" for c in sanidade)
+    n_at = sum(c["status"] == "ATENÇÃO" for c in sanidade)
+    n_fa = sum(c["status"] == "FALHA" for c in sanidade)
+    icone = {"OK": "✅", "ATENÇÃO": "⚠️", "FALHA": "❌"}
+    L = ["# Validação da simulação — OpiniOn (CC2, experimento Last.fm)", "",
+         f"Gerado por `python -m opinion.validacao_simulacao` em {datetime.now():%d/%m/%Y %H:%M} ({segundos:.0f} s).", "",
+         "> Neste experimento o **rótulo é real**: `conectou = 1` quando os dois usuários são amigos no Last.fm "
+         "(HetRec 2011). Usuários, artistas, escutas e amizades são dados reais; **só os encontros e a pulseira são "
+         "simulados**, e de forma independente da amizade. O desempenho do modelo mede, portanto, o quanto gosto "
+         "musical e contexto do encontro explicam uma amizade real, sob a premissa de que os encontros são sorteados "
+         "sem olhar a rede. Não é evidência de comportamento de encontros reais.", "",
+         "## Resumo", "",
+         f"- **Checagens de sanidade dos encontros:** {n_ok} OK, {n_at} atenção, {n_fa} falha(s).",
+         "- **Não se aplica:** o processo de conexão simulado, as interações de fundo, o toque como sinal do label e a "
+         "análise de sensibilidade por cenários (`config/cenarios_sensibilidade.yaml`) só valiam para o rótulo "
+         "simulado (`interacao_48h`). Com `label.tipo: amizade` não há premissa de conexão a testar; a premissa que "
+         "importa é a independência entre encontro e amizade, verificada abaixo.", "",
+         "## 1. Premissas dos encontros", "",
+         "Valores em `config/simulacao.yaml`. Gosto, usuários e amizades vêm do Last.fm (`docs/fontes_dados.md`).", "",
+         "| Parâmetro | Valor atual | Justificativa | Como validar |", "|---|---|---|---|"]
+    for caminho, porque, validar in PREMISSAS_AMIZADE:
+        L.append(f"| `{caminho}` | {_valor(cfg, caminho)} | {porque} | {validar} |")
+    L += ["", "## 2. Checagens de sanidade", "",
+          "| Status | Checagem | Valor | Faixa plausível | Por quê |", "|---|---|---|---|---|"]
+    for c in sanidade:
+        L.append(f"| {icone[c['status']]} {c['status']} | {c['checagem']} | {c['valor']} | {c['faixa']} | {c['por_que']} |")
+    L += ["", "## 3. Limitações conhecidas", "",
+          "- Os encontros são sorteados sem olhar a amizade: na vida real amigos se encontram mais, então o sinal "
+          "de proximidade/duração/repetição para amizade é subestimado aqui.",
+          "- O rótulo é estático (amizade já existente no dataset), não a formação de uma amizade após o encontro.",
+          "- O RSSI e o horário não têm relação com o rótulo por construção.",
+          "- Personas, frequências e locais são premissas; as personas reais do Design não foram incorporadas.",
+          "- Sem análise de sensibilidade: com rótulo real não há parâmetro de conexão a variar.", ""]
+    DOC.write_text("\n".join(L), encoding="utf-8")
+
+
+def main_amizade():
+    t0 = time.time()
+    cfg = carregar_config()
+    sanidade = checagens(RAIZ / "data", cfg, amizade=True)
+    escrever_doc_amizade(cfg, sanidade, time.time() - t0)
+    for c in sanidade:
+        print(f"  {c['status']:<8} {c['checagem']}: {c['valor']}")
+    print(f"\nDocumento: {DOC}")
+    return sanidade
+
+
 def main():
+    if modo_amizade():
+        return main_amizade()
     t0 = time.time()
     cenarios = yaml.safe_load(CENARIOS.read_text(encoding="utf-8"))
     resultados = {}

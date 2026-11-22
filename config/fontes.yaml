@@ -82,3 +82,16 @@ generos:
   religioso: [christian, gospel, bibles]
   trilhas_musicais: [soundtracks, musicals, broadway]
   indie_alternativo: [indie, alternative, independently distributed]
+
+# ---------------------------------------------------------------------
+# Last.fm (HetRec 2011): usuários reais, artistas, escutas e amizades.
+#   python -m opinion.fontes.lastfm     # gera data/reais/lastfm/
+# Gêneros reaproveitam a seção "generos" acima.
+# ---------------------------------------------------------------------
+lastfm:
+  pasta_origem: data/externo/lastfm/hetrec2011-lastfm-2k
+  data_perfil: "2026-06-01"        # data única atribuída às avaliações (o dataset não tem data de escuta)
+  encoding_artists: utf-8          # artists.dat é UTF-8 válido
+  encoding_tags: latin-1           # tags.dat é latin-1
+  min_usos_tag: 2                  # tag só conta se foi usada >= N vezes no artista
+  max_generos_por_artista: 3

@@ -1,0 +1,25 @@
+{
+  "fonte": "Last.fm (HetRec 2011)",
+  "url": "http://www.lastfm.com",
+  "citacao": "Cantador, I.; Brusilovsky, P.; Kuflik, T. 2nd Workshop on Information Heterogeneity and Fusion in Recommender Systems (HetRec 2011). RecSys 2011. Dados do site Last.fm (http://www.lastfm.com).",
+  "licenca": "uso não comercial",
+  "arquivos_usados": [
+    "artists.dat",
+    "user_artists.dat",
+    "user_friends.dat",
+    "tags.dat",
+    "user_taggedartists.dat"
+  ],
+  "transformacoes": [
+    "nota 1-5 = quintil das escutas dentro de cada usuário",
+    "criado_em fixo em 2026-06-01 (sem data de escuta na fonte)",
+    "gêneros a partir das tags (>= min_usos_tag usos), via seção generos",
+    "datas das tags não usadas (anos inválidos)"
+  ],
+  "gerado_em": "2026-11-22T17:25:23",
+  "usuarios": 1892,
+  "obras": 17632,
+  "avaliacoes": 92834,
+  "amizades": 12717,
+  "obras_sem_genero_reconhecido": 13199
+}

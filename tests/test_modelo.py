@@ -89,3 +89,81 @@ def test_split_vazio_falha(tmp_path):
     df.to_parquet(tmp_path / "dataset_modelo.parquet", index=False)
     with pytest.raises(ValueError, match="teste"):
         treinar(tmp_path, registrar=False)
+
+
+def test_publico_todos_usa_todos_os_encontros(tmp_path):
+    """Modo Last.fm: não existe 'desconhecidos'; sem algum_segue, o recorte é o conjunto inteiro."""
+    from opinion.modelo.treinar import mascara_desconhecidos
+    df = _dataset(tmp_path)
+    cols = ["compat_score", "extra"]
+    df = df.drop(columns="algum_segue")
+    df.to_parquet(tmp_path / "dataset_modelo.parquet", index=False)
+    meta = json.loads((tmp_path / "metadados.json").read_text())
+    meta["colunas_features"] = cols
+    (tmp_path / "metadados.json").write_text(json.dumps(meta))
+    cfg = copy.deepcopy(config())
+    cfg["publico"] = "todos"
+    assert mascara_desconhecidos(df, cfg).all()
+    assert mascara_desconhecidos(df).all()                 # sem algum_segue: tudo True
+    r = treinar(tmp_path, cfg, registrar=False)
+    te = r["vencedor"]["teste"]
+    assert te["n_desconhecidos"] == te["n"] == int((df.split == "teste").sum())
+    assert te["pr_auc_desconhecidos"] == pytest.approx(te["pr_auc"])
+
+
+def _dataset_todos(pasta):
+    df = _dataset(pasta, n=1500)
+    df = df.drop(columns="algum_segue")
+    df["local_original"] = "campus"
+    df.to_parquet(pasta / "dataset_modelo.parquet", index=False)
+    meta = json.loads((pasta / "metadados.json").read_text())
+    meta["colunas_features"] = ["compat_score", "extra"]
+    (pasta / "metadados.json").write_text(json.dumps(meta))
+    return df
+
+
+def test_doc_do_cc4_em_modo_todos_nao_fala_de_desconhecidos(tmp_path):
+    """No experimento Last.fm o texto não pode citar o recorte 'desconhecidos', 'interação em 48 h' nem o simulador."""
+    from opinion.modelo.comparar import comparar, escrever_doc
+    _dataset_todos(tmp_path)
+    cfg = copy.deepcopy(config())
+    cfg["publico"] = "todos"
+    cfg["comparacao"]["bootstrap"]["n"] = 20
+    cfg["comparacao"]["modelos"] = {k: cfg["comparacao"]["modelos"][k]
+                                    for k in ("regressao_logistica", "arvore_decisao")}
+    r = comparar(tmp_path, cfg, registrar=False, doc=None, figuras=None)
+    for com_figuras in (False, True):
+        texto = escrever_doc(r, com_figuras)
+        for proibido in ("desconhecid", "48 h", "premissas do simulador", "desc."):
+            assert proibido not in texto, proibido
+    assert r["protocolo"]["publico"] == "todos"
+
+
+def test_publico_desconhecidos_restaura_a_metrica_da_linha_principal():
+    from opinion.modelo.treinar import chave_metrica
+    cfg = copy.deepcopy(config())
+    cfg["publico"] = "todos"
+    assert chave_metrica(cfg) == "pr_auc"
+    cfg["publico"] = "desconhecidos"
+    assert chave_metrica(cfg) == "pr_auc_desconhecidos"
+
+
+def test_calibracao_so_culpa_class_weight_quando_a_familia_usa(tmp_path):
+    from opinion.modelo.comparar import analise, comparar
+    _dataset_todos(tmp_path)
+    cfg = copy.deepcopy(config())
+    cfg["publico"] = "todos"
+    cfg["comparacao"]["bootstrap"]["n"] = 20
+    cfg["comparacao"]["modelos"] = {k: cfg["comparacao"]["modelos"][k]
+                                    for k in ("regressao_logistica", "arvore_decisao")}
+    r = comparar(tmp_path, cfg, registrar=False, doc=None, figuras=None)
+    fam, b0 = r["_familias"], r["brier_constante_prevalencia"]
+    for k in fam:  # força as duas famílias a ficarem mal calibradas
+        fam[k]["teste"]["brier"] = b0 + 0.1
+    fam["arvore_decisao"]["params"] = {"max_depth": 3, "class_weight": None}
+    fam["regressao_logistica"]["params"] = {"C": 1.0, "class_weight": "balanced"}
+    cal = next(t for t in analise(r) if t.startswith("**Calibração:**"))
+    assert "class_weight=balanced" in cal and "Árvore" not in cal.split("class_weight")[0].split("(em")[-1]
+    fam["regressao_logistica"]["params"] = {"C": 1.0, "class_weight": None}
+    cal = next(t for t in analise(r) if t.startswith("**Calibração:**"))
+    assert "class_weight" not in cal

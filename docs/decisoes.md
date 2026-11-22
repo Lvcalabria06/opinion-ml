@@ -5,6 +5,25 @@ fica em cima. Decisões ainda abertas ficam em [`status.md`](status.md).
 
 ---
 
+## D-014 · 22/11/2026 · Experimento Last.fm: prever amizade (branch `experimento-lastfm`)
+
+- **Decisão:** trocar, só nesta branch, a fonte por HetRec 2011 Last.fm e a pergunta por "dois usuários
+  se encontraram; qual a chance de serem amigos?". O label é a amizade real (estática, sem data).
+  Encontros continuam simulados, independentes da amizade (`p_encontro` ×3: 162.897 encontros,
+  153.212 pares, 1.171 pares de amigos, 0,76% positivos contra densidade 0,71% da população).
+- **Por quê:** a Amazon dá pouca sobreposição (~2% dos pares sorteados dividem um item); no Last.fm,
+  56,5% dividem ≥1 artista. Amigos: 92,2%; Jaccard médio de artistas 0,103 contra 0,024 em não amigos.
+  Além disso o label passa a ser real, não simulado.
+- **Protocolo:** split por par 70/15/15 estratificado (semente 7), pois não há datas de amizade.
+  Fora das features: `algum_segue`, `seguem_mutuamente`, `interacoes_anteriores_par`, `interagiram_antes`,
+  `conexoes_min`, `conexoes_max`. Métrica: PR-AUC sobre todos os encontros (sem recorte "desconhecidos"),
+  ao lado da prevalência, da regra simples e do limiar F0,5.
+- **Consequências:** `seguidores.csv` passa a ser a amizade real; sem split temporal e com possível
+  causalidade reversa. Os encontros não carregam sinal real do label, então o resultado vem do gosto.
+  Resultados (teste, 184 encontros positivos em 176 pares, prevalência 0,0075): regressão logística PR-AUC 0,063, regra
+  simples 0,027, Jaccard de artistas sozinho 0,057 (medição pontual da equipe no mesmo split de teste, fora do pipeline versionado); CC4 escolheu Random Forest na validação (teste 0,055).
+  Requer validação do professor.
+
 ## D-013 · 18/11/2026 · Aviso por mídia no início do encontro
 
 O aviso indica os assuntos em que duas pessoas próximas mostram alta afinidade.

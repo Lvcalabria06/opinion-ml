@@ -30,6 +30,9 @@ métricas melhorem.
 - **Aviso por categoria:** a regra usa somente o histórico anterior ao início do encontro e o corte de cada mídia. A estimativa do modelo usa dados disponíveis ao fim.
 - **Honestidade sobre os dados:** métricas medem a simulação. "Melhor algoritmo" e ranking de features
   não são descobertas (ver [`docs/validacao_simulacao.md`](docs/validacao_simulacao.md)).
+- **Exceção na branch `experimento-lastfm`:** o rótulo é amizade real (estática) e o split é por par de
+  usuários, sem recorte "desconhecidos" (ver D-014). Não "corrija" de volta para split temporal nem
+  recorte `algum_segue == 0`.
 - **Dados externos têm fonte:** todo dataset público usado é citado (origem, licença, filtro aplicado).
 
 ## Convenções

@@ -3,7 +3,7 @@ CC4 — comparação de 3+ modelos no MLflow, com análise crítica.
 
 Mesmo protocolo do baseline (CC3, opinion.modelo.treinar): cada família de modelo é
 ajustada no "treino" com uma grade pequena e fixa; a configuração e o limiar do sinal
-(F0,5 entre desconhecidos) são escolhidos na "validacao"; o "teste" é medido uma vez
+(F0,5 no público avaliado: desconhecidos, ou todos os encontros no experimento Last.fm) são escolhidos na "validacao"; o "teste" é medido uma vez
 por família, só para relatar. A família vencedora também é escolhida na validação.
 
 Para cada família: um run filho no MLflow com parâmetros, métricas, curvas PR e ROC,
@@ -29,7 +29,8 @@ from sklearn.metrics import average_precision_score, brier_score_loss
 
 from opinion.modelo import PASTA_PROCESSADOS
 from opinion.modelo.treinar import (_graficos, _metricas_planas, avaliar_candidato, avaliar_regra, candidatos,
-                                    carregar, config, explicar, mascara_desconhecidos, medir_teste, no_limiar)
+                                    carregar, chave_metrica, config, explicar, mascara_desconhecidos, medir_teste,
+                                    no_limiar)
 from opinion.mundo import PASTA_BOOTSTRAP, RAIZ
 from opinion.pipeline.compatibilidade import MIDIAS
 
@@ -68,7 +69,7 @@ def ic_bootstrap(y, pontuacoes: dict[str, np.ndarray], referencias: list[str], n
 
 
 def por_contexto(te: pd.DataFrame, desc, pontuacoes: dict, limiares: dict, beta: float) -> pd.DataFrame:
-    """Precisão e taxa de sinal no limiar, por local, entre desconhecidos do teste."""
+    """Precisão e taxa de sinal no limiar, por local, no público avaliado do teste."""
     if "local_original" not in te:
         return pd.DataFrame()
     linhas = []
@@ -88,8 +89,8 @@ def teto(te: pd.DataFrame, desc, taxa_sinal: float) -> dict | None:
     if not VERDADE.exists():
         return None
     oc = pd.read_csv(VERDADE, usecols=["encontro_id", "p_conexao_latente"])
-    t = te[desc].merge(oc, on="encontro_id")
-    if t.empty:
+    t = te[desc].merge(oc, on="encontro_id").dropna(subset=["p_conexao_latente"])
+    if t.empty or t.conectou.nunique() < 2:
         return None
     k = max(1, int(round(taxa_sinal * len(t))))
     return {"pr_auc_desconhecidos": float(average_precision_score(t.conectou, t.p_conexao_latente)),
@@ -112,7 +113,7 @@ def comparar(pasta=PASTA_PROCESSADOS, cfg=None, registrar=True, doc: Path | None
              figuras: Path | None = FIGURAS, midia=None) -> dict:
     cfg = cfg or config()
     c = cfg["comparacao"]
-    beta, chave = float(cfg["limiar"]["beta"]), cfg["metrica"]
+    beta, chave = float(cfg["limiar"]["beta"]), chave_metrica(cfg)
     dm, meta = carregar(pasta)
     cols = meta["colunas_features"]
     if midia is not None:
@@ -128,7 +129,7 @@ def comparar(pasta=PASTA_PROCESSADOS, cfg=None, registrar=True, doc: Path | None
     for nome, parte in (("treino", tr), ("validacao", va), ("teste", te)):
         if parte.empty:
             raise ValueError(f"split {nome} vazio")
-    desc_va, desc_te = mascara_desconhecidos(va).to_numpy(), mascara_desconhecidos(te).to_numpy()
+    desc_va, desc_te = mascara_desconhecidos(va, cfg).to_numpy(), mascara_desconhecidos(te, cfg).to_numpy()
     regra = avaliar_regra(va, te, desc_va, desc_te, beta)
 
     familias = {}
@@ -168,7 +169,7 @@ def comparar(pasta=PASTA_PROCESSADOS, cfg=None, registrar=True, doc: Path | None
     resumo = {
         "gerado_em": datetime.now().isoformat(timespec="seconds"),
         "protocolo": {"midia": midia or "todas", "metrica_escolha": chave, "beta_limiar": beta, "referencia": ref,
-                      "por_split": meta.get("por_split"), "n_features": len(cols)},
+                      "publico": cfg.get("publico", "desconhecidos"), "por_split": meta.get("por_split"), "n_features": len(cols)},
         "vencedor": vencedor,
         "familias": {k: {"tipo": f["tipo"], "params": f["params"], "limiar": f["limiar"],
                          "validacao": f["validacao"], "teste": f["teste"], "tempo_treino_s": f["tempo_treino_s"],
@@ -210,19 +211,22 @@ def _figuras(r: dict) -> dict:
     lim = {k: f["limiar"] for k, f in fam.items()} | {"regra": r["regra_simples"]["limiar"]}
     figs = {}
 
-    fig, axs = plt.subplots(1, 2, figsize=(11, 4.4))
-    for ax, (titulo, m) in zip(axs, (("todos", np.ones_like(d)), ("desconhecidos", d))):
+    todos = r["protocolo"].get("publico") == "todos"
+    sub = "todos os encontros" if todos else "desconhecidos"
+    grupos = [("todos", np.ones_like(d))] + ([] if todos else [("desconhecidos", d)])
+    fig, axs = plt.subplots(1, len(grupos), figsize=(5.5 * len(grupos), 4.4), squeeze=False)
+    for ax, (titulo, m) in zip(axs[0], grupos):
         for k, p in pont.items():
             pr, rc, _ = precision_recall_curve(y[m], p[m])
             ax.plot(rc, pr, ls="--" if k == "regra" else "-",
                     label=f"{_nome(k)} ({average_precision_score(y[m], p[m]):.3f})")
         ax.axhline(y[m].mean(), c="gray", ls=":", label=f"acaso ({y[m].mean():.3f})")
-        ax.set(title=f"Precisão × recall — teste, {titulo}", xlabel="recall", ylabel="precisão", ylim=(0, 0.6))
+        ax.set(title=f"Precisão × recall — teste, {titulo}", xlabel="recall", ylabel="precisão", ylim=(0, 1))
         ax.legend(fontsize=7)
     figs["comparacao/curvas_pr.png"] = fig
 
-    fig, axs = plt.subplots(1, 2, figsize=(11, 4.4))
-    for ax, (titulo, m) in zip(axs, (("todos", np.ones_like(d)), ("desconhecidos", d))):
+    fig, axs = plt.subplots(1, len(grupos), figsize=(5.5 * len(grupos), 4.4), squeeze=False)
+    for ax, (titulo, m) in zip(axs[0], grupos):
         for k, p in pont.items():
             fpr, tpr, _ = roc_curve(y[m], p[m])
             ax.plot(fpr, tpr, ls="--" if k == "regra" else "-", label=f"{_nome(k)} ({roc_auc_score(y[m], p[m]):.3f})")
@@ -242,7 +246,7 @@ def _figuras(r: dict) -> dict:
     if r.get("teto"):
         ax.axvline(r["teto"]["pr_auc_desconhecidos"], c="tab:green", ls="--", label="teto do simulador")
     ax.set(yticks=range(len(ordem)), yticklabels=[_nome(k) for k in ordem], xlabel="PR-AUC (IC 95%)",
-           title="PR-AUC entre desconhecidos — teste")
+           title=("PR-AUC em todos os encontros — teste" if todos else "PR-AUC entre desconhecidos — teste"))
     ax.legend(fontsize=8)
     figs["comparacao/pr_auc_ic.png"] = fig
 
@@ -259,14 +263,14 @@ def _figuras(r: dict) -> dict:
         if col:
             ax.tick_params(labelleft=False)
     fig.tight_layout()
-    fig.suptitle("Matriz de confusão — desconhecidos, teste", y=1.08)
+    fig.suptitle(f"Matriz de confusão — {sub}, teste", y=1.08)
     figs["comparacao/matrizes_confusao.png"] = fig
 
     imp = pd.DataFrame({_nome(k): f["importancia"] for k, f in fam.items()})
     top = imp.max(axis=1).sort_values(ascending=False).index[:12]
     fig, ax = plt.subplots(figsize=(8, 4.8))
     imp.loc[top[::-1]].plot.barh(ax=ax, width=0.8)
-    ax.set(title="Importância por permutação (queda de PR-AUC, desconhecidos, validação)", xlabel="queda de PR-AUC")
+    ax.set(title=f"Importância por permutação (queda de PR-AUC, {sub}, validação)", xlabel="queda de PR-AUC")
     ax.legend(fontsize=7)
     figs["comparacao/importancia.png"] = fig
     return figs
@@ -299,45 +303,70 @@ def escrever_doc(r: dict, com_figuras: bool) -> str:
     ps = r["protocolo"]["por_split"] or {}
     ordem = sorted(fam, key=lambda k: -(fam[k]["validacao"]["pr_auc_desconhecidos"] or 0))
     brier0 = r["brier_constante_prevalencia"]
+    todos = r["protocolo"].get("publico") == "todos"
+    pub = "todos os encontros" if todos else "desconhecidos"
+    entre = "em " + pub if todos else "entre desconhecidos"
+    fonte = ("> Usuários, obras, notas e o rótulo `conectou` (amizade no Last.fm) são reais (HetRec 2011 Last.fm, "
+             "[`fontes_dados.md`](fontes_dados.md)); só os encontros são simulados, **independentes da amizade**. "
+             "O rótulo é estático (as amizades não têm data): as métricas mostram quanto o gosto musical acompanha "
+             "a amizade, não que o encontro a causou, e amigos se influenciam (o gosto pode ser efeito da amizade)."
+             if todos else
+             "> Usuários, obras e notas são reais (Amazon Reviews 2023); encontros e o label `conectou` são simulados "
+             "([`fontes_dados.md`](fontes_dados.md)). As métricas medem quão bem cada modelo recupera o processo da "
+             "simulação, não o comportamento de usuários reais da pulseira.")
     L = [
         "# Comparação de modelos — OpiniOn (CC4)", "",
         f"Gerado por `python -m opinion.modelo.comparar` em {datetime.now():%d/%m/%Y %H:%M}. "
         "Números do teste medidos **uma vez** por modelo; nada foi escolhido com eles.", "",
-        "> Usuários, obras e notas são reais (Amazon Reviews 2023); encontros e o label `conectou` são simulados "
-        "([`fontes_dados.md`](fontes_dados.md)). As métricas medem quão bem cada modelo recupera o processo da "
-        "simulação, não o comportamento de usuários reais da pulseira.", "",
+        fonte, "",
         "## 1. Protocolo", "",
-        "- **Mesmos dados e split do CC3:** treino semanas 1–8"
-        + (f" ({_n(ps.get('treino', {}).get('encontros', 0))} encontros)" if ps else "")
-        + ", validação 9–10, teste 11–12; purga na fronteira treino/validação.",
+        ("- **Mesmos dados e split do CC3:** divisão por par (cada par inteiro em treino, validação ou teste)"
+         + (f", treino com {_n(ps.get('treino', {}).get('encontros', 0))} encontros" if ps else "") + ".")
+        if todos else
+        ("- **Mesmos dados e split do CC3:** treino semanas 1–8"
+         + (f" ({_n(ps.get('treino', {}).get('encontros', 0))} encontros)" if ps else "")
+         + ", validação 9–10, teste 11–12; purga na fronteira treino/validação."),
         f"- **Cada família** tem uma grade pequena e fixa (`config/modelo.yaml → comparacao`). A configuração e o "
-        f"limiar do sinal (F{_f(r['protocolo']['beta_limiar'], 1)} entre desconhecidos) são escolhidos na validação. "
+        f"limiar do sinal (F{_f(r['protocolo']['beta_limiar'], 1)} {entre}) são escolhidos na validação. "
         "Otimização de hiperparâmetros fica para o CC5 (Optuna) e validação cruzada para o CC6.",
         f"- **Escolha do melhor modelo:** {r['protocolo']['metrica_escolha']} na validação. "
         "A regra simples (`compat_score`) recebe o mesmo protocolo, com limiar próprio.",
         f"- **Incerteza:** intervalo de confiança de 95% por bootstrap pareado ({len(ic)} pontuações, "
-        "mesmas reamostras para todas) no teste, entre desconhecidos.", "",
+        f"mesmas reamostras para todas) no teste, {entre}.", "",
         "## 2. Resultado", "",
-        "| Modelo | PR-AUC desc. (valid.) | PR-AUC desc. (teste, IC 95%) | PR-AUC geral (teste) | ROC-AUC desc. (teste) | Brier (teste) |",
-        "|---|---|---|---|---|---|",
     ]
-    for k in ordem:
-        f, i = fam[k], ic[k]
-        marca = " **(escolhido)**" if k == venc else ""
-        L.append(f"| {_nome(k)}{marca} | {_f(f['validacao']['pr_auc_desconhecidos'])} | {_f(i['pr_auc'])} "
-                 f"({_f(i['ic'][0])}–{_f(i['ic'][1])}) | {_f(f['teste']['pr_auc'])} | "
-                 f"{_f(f['teste']['roc_auc_desconhecidos'])} | {_f(f['teste']['brier'])} |")
-    L.append(f"| Regra simples | {_f(regra['validacao']['pr_auc_desconhecidos'])} | {_f(ic['regra']['pr_auc'])} "
-             f"({_f(ic['regra']['ic'][0])}–{_f(ic['regra']['ic'][1])}) | {_f(regra['teste']['pr_auc'])} | "
-             f"{_f(regra['teste']['roc_auc_desconhecidos'])} | não se aplica |")
-    prev_d = fam[venc]["teste"]["prevalencia_desconhecidos"]
-    L += [f"| *acaso* | | *{_f(prev_d)}* | *{_f(fam[venc]['teste']['prevalencia'])}* | *0,500* | "
-          f"*{_f(brier0)}* (constante) |", ""]
+    if todos:
+        L += ["| Modelo | PR-AUC (valid.) | PR-AUC (teste, IC 95%) | ROC-AUC (teste) | Brier (teste) |",
+              "|---|---|---|---|---|"]
+        for k in ordem:
+            f, i = fam[k], ic[k]
+            marca = " **(escolhido)**" if k == venc else ""
+            L.append(f"| {_nome(k)}{marca} | {_f(f['validacao']['pr_auc'])} | {_f(i['pr_auc'])} "
+                     f"({_f(i['ic'][0])}–{_f(i['ic'][1])}) | {_f(f['teste']['roc_auc'])} | {_f(f['teste']['brier'])} |")
+        L.append(f"| Regra simples | {_f(regra['validacao']['pr_auc'])} | {_f(ic['regra']['pr_auc'])} "
+                 f"({_f(ic['regra']['ic'][0])}–{_f(ic['regra']['ic'][1])}) | {_f(regra['teste']['roc_auc'])} "
+                 "| não se aplica |")
+        L += [f"| *acaso* | | *{_f(fam[venc]['teste']['prevalencia'])}* | *0,500* | *{_f(brier0)}* (constante) |", ""]
+    else:
+        L += ["| Modelo | PR-AUC desc. (valid.) | PR-AUC desc. (teste, IC 95%) | PR-AUC geral (teste) | ROC-AUC desc. (teste) | Brier (teste) |",
+              "|---|---|---|---|---|---|"]
+        for k in ordem:
+            f, i = fam[k], ic[k]
+            marca = " **(escolhido)**" if k == venc else ""
+            L.append(f"| {_nome(k)}{marca} | {_f(f['validacao']['pr_auc_desconhecidos'])} | {_f(i['pr_auc'])} "
+                     f"({_f(i['ic'][0])}–{_f(i['ic'][1])}) | {_f(f['teste']['pr_auc'])} | "
+                     f"{_f(f['teste']['roc_auc_desconhecidos'])} | {_f(f['teste']['brier'])} |")
+        L.append(f"| Regra simples | {_f(regra['validacao']['pr_auc_desconhecidos'])} | {_f(ic['regra']['pr_auc'])} "
+                 f"({_f(ic['regra']['ic'][0])}–{_f(ic['regra']['ic'][1])}) | {_f(regra['teste']['pr_auc'])} | "
+                 f"{_f(regra['teste']['roc_auc_desconhecidos'])} | não se aplica |")
+        prev_d = fam[venc]["teste"]["prevalencia_desconhecidos"]
+        L += [f"| *acaso* | | *{_f(prev_d)}* | *{_f(fam[venc]['teste']['prevalencia'])}* | *0,500* | "
+              f"*{_f(brier0)}* (constante) |", ""]
     if com_figuras:
         L += ["![PR-AUC com IC](img/cc4/pr_auc_ic.png)", "", "![Curvas PR](img/cc4/curvas_pr.png)", "",
               "![Curvas ROC](img/cc4/curvas_roc.png)", ""]
 
-    L += ["## 3. No ponto de operação (desconhecidos, teste)", "",
+    L += [f"## 3. No ponto de operação ({pub}, teste)", "",
           "O limiar do modelo é uma avaliação acadêmica. O aviso do protótipo usa o corte por categoria na proximidade.", "",
           "| Modelo | Limiar | Precisão | Recall | F0,5 | Sinal em | VP | FP | FN | VN |",
           "|---|---|---|---|---|---|---|---|---|---|"]
@@ -350,7 +379,7 @@ def escrever_doc(r: dict, com_figuras: bool) -> str:
     if com_figuras:
         L += ["![Matrizes de confusão](img/cc4/matrizes_confusao.png)", ""]
 
-    L += ["## 4. Diferenças e incerteza (PR-AUC entre desconhecidos, teste)", "",
+    L += [f"## 4. Diferenças e incerteza (PR-AUC {entre}, teste)", "",
           f"| Modelo | vs {_nome(ref)} (IC 95%) | vs regra simples (IC 95%) |", "|---|---|---|"]
     for k in ordem:
         i = ic[k]
@@ -361,7 +390,7 @@ def escrever_doc(r: dict, com_figuras: bool) -> str:
 
     ctx = r["_contexto"]
     if not ctx.empty:
-        L += ["## 5. Precisão do sinal por contexto (desconhecidos, teste)", "",
+        L += [f"## 5. Precisão do sinal por contexto ({pub}, teste)", "",
               "| Local | Encontros | Taxa real | " + " | ".join(_nome(k) for k in ordem + ["regra"]) + " |",
               "|---|---|---|" + "---|" * (len(ordem) + 1)]
         for local, g in ctx.groupby("local"):
@@ -371,7 +400,7 @@ def escrever_doc(r: dict, com_figuras: bool) -> str:
         L += ["", "Cada célula: precisão (fração de encontros com sinal).", ""]
 
     L += ["## 6. O que cada modelo usa (importância por permutação, validação)", "",
-          "Queda de PR-AUC entre desconhecidos quando a feature é embaralhada. Top 5 de cada modelo:", "",
+          f"Queda de PR-AUC {entre} quando a feature é embaralhada. Top 5 de cada modelo:", "",
           "| Modelo | 1º | 2º | 3º | 4º | 5º |", "|---|---|---|---|---|---|"]
     for k in ordem:
         top = fam[k]["importancia"].head(5)
@@ -389,6 +418,17 @@ def escrever_doc(r: dict, com_figuras: bool) -> str:
     L.append("")
 
     L += ["## 8. Análise crítica", ""] + [f"- {t}" for t in analise(r)] + [""]
+    if todos:
+        L += ["## 9. Limitações", "",
+              "- **Rótulo estático e possível causalidade invertida.** A amizade não tem data: não dá para afirmar que o "
+              "gosto antecede a amizade nem que o encontro a causou (amigos se influenciam).",
+              "- **Encontros simulados, independentes da amizade.** Local, duração e RSSI não carregam sinal real do "
+              "rótulo; o poder preditivo vem do gosto musical (Last.fm).",
+              "- **Um único split por par.** O IC do bootstrap cobre a variação de amostragem do teste, não a de "
+              "outras divisões; estabilidade entre folds é o CC6.",
+              "- **Grades fixas e pequenas.** Um modelo pode ter perdido só por falta de ajuste; o CC5 otimiza o "
+              "vencedor com Optuna.", ""]
+        return "\n".join(L)
     L += ["## 9. Limitações", "",
           "- **Label simulado.** O ranking dos modelos vale para o processo da simulação. Com outras premissas "
           "(ver os cenários em [`validacao_simulacao.md`](validacao_simulacao.md)) a ordem entre modelos próximos "
@@ -440,9 +480,12 @@ def analise(r: dict) -> list[str]:
     b0 = r["brier_constante_prevalencia"]
     ruins = [k for k in fam if fam[k]["teste"]["brier"] > b0]
     bons = [k for k in fam if fam[k]["teste"]["brier"] <= b0]
+    com_peso = [k for k in ruins if fam[k]["params"].get("class_weight") == "balanced"]
     out.append(f"**Calibração:** prever sempre a prevalência dá Brier {_f(b0)}. "
-               + (f"{_lista([_nome(k) for k in ruins])} {'fica' if len(ruins) == 1 else 'ficam'} pior que isso "
-                  "(probabilidades infladas, efeito de `class_weight=balanced`); " if ruins else "")
+               + (f"{_lista([_nome(k) for k in ruins])} {'fica' if len(ruins) == 1 else 'ficam'} pior que isso"
+                  + (f" (em {_lista([_nome(k) for k in com_peso])}, probabilidades infladas por `class_weight=balanced`)"
+                     if com_peso else "")
+                  + "; " if ruins else "")
                + (f"{_lista([_nome(k) for k in bons])} {'fica' if len(bons) == 1 else 'ficam'} melhor. "
                   if bons else "")
                + "A ordenação e o limiar não dependem disso, mas a probabilidade só pode ser mostrada como chance "
@@ -452,7 +495,10 @@ def analise(r: dict) -> list[str]:
     out.append("**O que os modelos aprendem:** "
                + (f"todos têm {', '.join(f'`{c}`' for c in sorted(comum))} entre as 3 features mais importantes"
                   if comum else "as 3 features mais importantes variam entre os modelos")
-               + ". Lembrete: a importância reflete as premissas do simulador, não uma descoberta sobre usuários.")
+               + (". Lembrete: o rótulo é amizade real no Last.fm, mas estática (sem data), e os encontros são "
+                  "simulados; a importância mostra associação com a amizade, não causa."
+                  if r["protocolo"].get("publico") == "todos" else
+                  ". Lembrete: a importância reflete as premissas do simulador, não uma descoberta sobre usuários."))
     if r.get("teto"):
         t = r["teto"]
         out.append(f"**Margem:** o teto do simulador (a probabilidade escondida) chega a PR-AUC "
@@ -532,7 +578,8 @@ def _registrar(r: dict, figs: dict, texto: str, cfg: dict, exemplo) -> dict:
                 exp = explicar(f["modelo"], cols, f["tipo"])
                 if exp:
                     mlflow.log_text(exp, "explicacao.txt")
-                preds = {"y": te.conectou.to_numpy(), "p": f["p_teste"], "regra": te.compat_score.to_numpy(), "desc": d}
+                preds = {"y": te.conectou.to_numpy(), "p": f["p_teste"], "regra": te.compat_score.to_numpy(), "desc": d,
+                         "todos": r["protocolo"].get("publico") == "todos"}
                 for caminho, fig in _graficos(preds, f["limiar"], regra["limiar"]).items():
                     mlflow.log_figure(fig, caminho)
                     plt.close(fig)
@@ -562,7 +609,8 @@ def _imprimir(r: dict) -> None:
     print(f"{'Regra simples':22} {regra['validacao']['pr_auc_desconhecidos']:7.3f} {ic['regra']['pr_auc']:7.3f} "
           f"{ic['regra']['ic'][0]:7.3f}–{ic['regra']['ic'][1]:.3f} {nr['precisao']:9.3f} {nr['recall']:7.3f} "
           f"{nr['taxa_sinal']:7.1%}")
-    print("(PR-AUC entre desconhecidos; * = escolhido na validação; precisão/recall/sinal no limiar, teste)\n")
+    pub = "em todos os encontros" if r["protocolo"].get("publico") == "todos" else "entre desconhecidos"
+    print(f"(PR-AUC {pub}; * = escolhido na validação; precisão/recall/sinal no limiar, teste)\n")
     for t in analise(r):
         print(" -", t.replace("**", ""))
     if r.get("mlflow_run_pai"):

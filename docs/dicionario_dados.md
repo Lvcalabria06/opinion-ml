@@ -29,6 +29,12 @@ data/reais/amazon2023/    amostra filtrada da Amazon (entrada do simulador)
 | `seguidores.csv` | seguidor, seguido, desde | quem segue quem e desde quando (inclui os novos) |
 | `interacoes.csv` | interacao_id, origem, destino, tipo, obra_id, avaliacao_id, criado_em | tipos: `seguir`, `abrir_perfil`, `curtir_review`, `comentar_review`, `salvar_obra` |
 
+**Na branch `experimento-lastfm`:**
+- `avaliacoes.csv` (em `data/reais/lastfm/`) tem a coluna `escutas` (contagem de escutas do Last.fm; a `nota` é o quintil por usuário);
+- `seguidores.csv` passa a ser as **amizades reais** do Last.fm (nos dois sentidos, sem data real);
+- `amizades.csv` (em `data/reais/lastfm/`): usuario_a, usuario_b, uma linha por amizade; é o label `conectou`
+  dos pares que se encontram.
+
 As interações vêm de três fontes, e o modelo **não sabe qual**: conexões geradas por encontros,
 interações entre amigos e interações vindas do feed.
 

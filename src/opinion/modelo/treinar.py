@@ -43,8 +43,23 @@ def carregar(pasta=PASTA_PROCESSADOS) -> tuple[pd.DataFrame, dict]:
     return dm, meta
 
 
-def mascara_desconhecidos(df: pd.DataFrame) -> pd.Series:
+def mascara_desconhecidos(df: pd.DataFrame, cfg: dict | None = None) -> pd.Series:
+    """Recorte dos encontros avaliados. Com `publico: todos` (ou sem `algum_segue`) é o conjunto inteiro."""
+    if todos_os_encontros(cfg) or "algum_segue" not in df.columns:
+        return pd.Series(True, index=df.index)
     return df.algum_segue == 0
+
+
+def todos_os_encontros(cfg: dict | None) -> bool:
+    return (cfg or {}).get("publico") == "todos"
+
+
+def chave_metrica(cfg: dict) -> str:
+    """Chave da métrica de escolha: com publico: desconhecidos, `pr_auc` vira `pr_auc_desconhecidos` (linha principal)."""
+    m = cfg["metrica"]
+    if m in ("pr_auc", "roc_auc") and not todos_os_encontros(cfg):
+        return f"{m}_desconhecidos"
+    return m
 
 
 # ======================================================================== métricas
@@ -179,8 +194,8 @@ def treinar(pasta=PASTA_PROCESSADOS, cfg=None, registrar=True) -> dict:
     for nome, parte in (("treino", tr), ("validacao", va), ("teste", te)):
         if parte.empty:
             raise ValueError(f"split {nome} vazio")
-    desc_va, desc_te = mascara_desconhecidos(va).to_numpy(), mascara_desconhecidos(te).to_numpy()
-    chave = cfg["metrica"]
+    desc_va, desc_te = mascara_desconhecidos(va, cfg).to_numpy(), mascara_desconhecidos(te, cfg).to_numpy()
+    chave = chave_metrica(cfg)
 
     regra = avaliar_regra(va, te, desc_va, desc_te, beta)
     resultados = [avaliar_candidato(nome, tipo, params, tr, va, cols, desc_va, beta)
@@ -198,11 +213,14 @@ def treinar(pasta=PASTA_PROCESSADOS, cfg=None, registrar=True) -> dict:
 
     resumo = {
         "gerado_em": datetime.now().isoformat(timespec="seconds"),
+        "publico": cfg.get("publico", "desconhecidos"),
         "algoritmo": vencedor["nome"],
         "tipo": vencedor["tipo"],
         "params": vencedor["params"],
         "limiar": vencedor["limiar"],
-        "criterio_limiar": f"max {nome_f} entre desconhecidos na validação",
+        "criterio_limiar": f"max {nome_f} "
+                           + ("em todos os encontros" if todos_os_encontros(cfg) else "entre desconhecidos")
+                           + " na validação",
         "features": cols,
         "n_features": len(cols),
         "regra_simples": regra,
@@ -217,7 +235,8 @@ def treinar(pasta=PASTA_PROCESSADOS, cfg=None, registrar=True) -> dict:
         "_modelo": vencedor["modelo"],
     }
     if registrar:
-        preds = {"y": te.conectou.to_numpy(), "p": p_te, "regra": te.compat_score.to_numpy(), "desc": desc_te}
+        preds = {"y": te.conectou.to_numpy(), "p": p_te, "regra": te.compat_score.to_numpy(), "desc": desc_te,
+                 "todos": todos_os_encontros(cfg)}
         resumo.update(_registrar(vencedor["modelo"], resumo, preds, pasta, cfg))
     return resumo
 
@@ -232,11 +251,13 @@ def _graficos(preds: dict, limiar: float, limiar_regra: float) -> dict:
     from sklearn.metrics import roc_curve
 
     y, p, r, d = preds["y"], preds["p"], preds["regra"], preds["desc"]
-    grupos = [("todos", np.ones_like(d, dtype=bool)), ("desconhecidos", d)]
+    todos = preds.get("todos", False)
+    grupos = [("todos", np.ones_like(d, dtype=bool))] + ([] if todos else [("desconhecidos", d)])
+    sub = "todos os encontros" if todos else "desconhecidos"
     figs = {}
 
-    fig, axs = plt.subplots(1, 2, figsize=(10, 4.2))
-    for ax, (nome, m) in zip(axs, grupos):
+    fig, axs = plt.subplots(1, len(grupos), figsize=(5 * len(grupos), 4.2), squeeze=False)
+    for ax, (nome, m) in zip(axs[0], grupos):
         for rot, s in (("modelo", p), ("regra simples", r)):
             pr, rc, _ = precision_recall_curve(y[m], s[m])
             ax.plot(rc, pr, label=f"{rot} (PR-AUC {average_precision_score(y[m], s[m]):.3f})")
@@ -245,8 +266,8 @@ def _graficos(preds: dict, limiar: float, limiar_regra: float) -> dict:
         ax.legend(fontsize=8)
     figs["graficos/curvas_pr.png"] = fig
 
-    fig, axs = plt.subplots(1, 2, figsize=(10, 4.2))
-    for ax, (nome, m) in zip(axs, grupos):
+    fig, axs = plt.subplots(1, len(grupos), figsize=(5 * len(grupos), 4.2), squeeze=False)
+    for ax, (nome, m) in zip(axs[0], grupos):
         for rot, s in (("modelo", p), ("regra simples", r)):
             fpr, tpr, _ = roc_curve(y[m], s[m])
             ax.plot(fpr, tpr, label=f"{rot} (ROC-AUC {roc_auc_score(y[m], s[m]):.3f})")
@@ -270,7 +291,7 @@ def _graficos(preds: dict, limiar: float, limiar_regra: float) -> dict:
         ax.imshow(cm, cmap="Blues")
         for (i, j), v in np.ndenumerate(cm):
             ax.text(j, i, f"{v:,}", ha="center", va="center", color="black")
-        ax.set(title=f"{rot} — desconhecidos, limiar {t:.3f}", xticks=[0, 1], yticks=[0, 1],
+        ax.set(title=f"{rot} — {sub}, limiar {t:.3f}", xticks=[0, 1], yticks=[0, 1],
                xticklabels=["sem sinal", "sinal"], yticklabels=["não conectou", "conectou"])
     figs["graficos/matriz_confusao_desconhecidos.png"] = fig
     return figs
@@ -340,18 +361,22 @@ def _imprimir(r: dict) -> None:
     print(f"{'':28} {'validação':>10} {'teste':>8} {'regra(te)':>10} {'acaso(te)':>10}")
     print(f"{'PR-AUC geral':28} {va['pr_auc']:10.3f} {te['pr_auc']:8.3f} {regra['teste']['pr_auc']:10.3f} "
           f"{te['prevalencia']:10.3f}")
-    print(f"{'PR-AUC desconhecidos':28} {va['pr_auc_desconhecidos']:10.3f} {te['pr_auc_desconhecidos']:8.3f} "
-          f"{regra['teste']['pr_auc_desconhecidos']:10.3f} {te['prevalencia_desconhecidos']:10.3f}")
-    print(f"{'ROC-AUC desconhecidos':28} {va['roc_auc_desconhecidos']:10.3f} {te['roc_auc_desconhecidos']:8.3f} "
+    todos = r.get("publico") == "todos"
+    if not todos:
+        print(f"{'PR-AUC desconhecidos':28} {va['pr_auc_desconhecidos']:10.3f} {te['pr_auc_desconhecidos']:8.3f} "
+              f"{regra['teste']['pr_auc_desconhecidos']:10.3f} {te['prevalencia_desconhecidos']:10.3f}")
+    rot_roc = "ROC-AUC geral" if todos else "ROC-AUC desconhecidos"
+    print(f"{rot_roc:28} {va['roc_auc_desconhecidos']:10.3f} {te['roc_auc_desconhecidos']:8.3f} "
           f"{regra['teste']['roc_auc_desconhecidos']:10.3f} {0.5:10.3f}")
+    pub = "todos os encontros" if todos else "desconhecidos"
     print(f"{'Brier (todos)':28} {va['brier']:10.3f} {te['brier']:8.3f}")
     nl, nr = te["no_limiar_desconhecidos"], regra["teste"]["no_limiar_desconhecidos"]
     f = next(k for k in nl if k.startswith("f") and k[1:].isdigit())
-    print(f"No limiar, desconhecidos (teste):  modelo  precisão {nl['precisao']:.3f}  recall {nl['recall']:.3f}  "
+    print(f"No limiar, {pub} (teste):  modelo  precisão {nl['precisao']:.3f}  recall {nl['recall']:.3f}  "
           f"{f} {nl[f]:.3f}  sinal em {nl['taxa_sinal']:.1%}")
     print(f"{'':35}regra   precisão {nr['precisao']:.3f}  recall {nr['recall']:.3f}  "
           f"{f} {nr[f]:.3f}  sinal em {nr['taxa_sinal']:.1%}")
-    print(f"Matriz de confusão do modelo (desconhecidos, teste): VP {nl['vp']}  FP {nl['fp']}  "
+    print(f"Matriz de confusão do modelo ({pub}, teste): VP {nl['vp']}  FP {nl['fp']}  "
           f"FN {nl['fn']}  VN {nl['vn']}")
     print("Supera a regra na validação (critério):", "sim" if r["supera_regra_validacao"] else "NÃO",
           "| no teste (só relato):", "sim" if r["supera_regra_teste"] else "NÃO")

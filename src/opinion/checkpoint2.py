@@ -29,18 +29,18 @@ def _seguem(seg: pd.DataFrame, a: str, b: str, t) -> bool:
 
 
 def _escolher_par(f, t, semente: int) -> tuple[str, str]:
-    """Dois usuários com avaliações e que não se seguem antes de t (o público da pulseira)."""
+    """Dois usuários com avaliações que ainda não são amigos/seguidores antes de t (par que acabou de se encontrar)."""
     rng = np.random.default_rng(semente)
     com_aval = np.sort(f["avaliacoes"][f["avaliacoes"].criado_em < t].usuario_id.unique())
     for _ in range(200):
         a, b = rng.choice(com_aval, 2, replace=False)
         if not _seguem(f["seguidores"], a, b, t):
             return str(a), str(b)
-    raise RuntimeError("não achei um par de desconhecidos")
+    raise RuntimeError("não achei um par que não seja amigo")
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Checkpoint 2: aviso por categoria e estimativa de interação")
+    ap = argparse.ArgumentParser(description="Checkpoint 2: aviso por categoria e estimativa do modelo (interação em 48 h ou amizade, conforme o publico)")
     ap.add_argument("--usuarios", nargs=2, metavar=("A", "B"))
     ap.add_argument("--local", default="cinema", choices=C.LOCAIS)
     ap.add_argument("--duracao", type=int, default=600, help="segundos")
@@ -70,7 +70,7 @@ def main():
         sys.exit("   FALHOU: a pontuação ao vivo não reproduz as features do treino")
 
     print("2) Encontro simulado (formato do contrato MQTT)")
-    corte = max(f["interacoes"].criado_em.max(), f["encontros"].fim.max())
+    corte = pd.concat([f["interacoes"].criado_em, f["encontros"].fim]).max()   # interacoes pode estar vazia (Last.fm)
     inicio = (corte + pd.Timedelta(hours=1)).floor("s")
     ua, ub = a.usuarios or _escolher_par(f, inicio, a.semente)
     pulseira = f["usuarios"].set_index("usuario_id").pulseira_id.get(ua)
@@ -106,7 +106,8 @@ def main():
         p = float(modelo.predict_proba(entrada)[0, 1])
         estimativas[midia] = p
         print(f"   {midia}: afinidade {linha[f'compat_score_{midia}']:.3f}; "
-              f"estimativa de interação em 48 h após o encontro {p:.3f} ({info['algoritmo']})")
+              f"{'chance de amizade' if cfg.get('publico') == 'todos' else 'estimativa de interação em 48 h após o encontro'} "
+              f"{p:.3f} ({info['algoritmo']})")
 
     saida = Path(PASTA_PROCESSADOS) / "avisos_categoria.csv"
     registro = {"encontro_id": payload["encontro_id"], "usuario_a": ua, "usuario_b": ub,
@@ -114,13 +115,14 @@ def main():
                 "estimativas_48h": json.dumps(estimativas)}
     pd.DataFrame([registro]).to_csv(saida, mode="a", header=not saida.exists(), index=False)
 
-    if a.baseline or a.retreinar:
+    if a.baseline or a.retreinar or cfg.get("publico") == "todos":   # Last.fm: o baseline geral é o modelo
         if a.retreinar:
             _imprimir(treinar(registrar=True))
         modelo, info = carregar_modelo(cfg)
         r = pontuar(encontro, f, modelo, info, cfg_p, cols)
         r.pop("_X")
-        print(f"   Baseline acadêmico CC3, estimativa de interação: {r['probabilidade']:.3f}")
+        rotulo = "chance de amizade" if cfg.get("publico") == "todos" else "estimativa de interação"
+        print(f"   Baseline acadêmico CC3, {rotulo}: {r['probabilidade']:.3f}")
         previsoes = Path(PASTA_PROCESSADOS) / "previsoes.csv"
         pd.DataFrame([{**r, "pontuado_em": pd.Timestamp.now().isoformat(timespec="seconds")}]).to_csv(
             previsoes, mode="a", header=not previsoes.exists(), index=False)

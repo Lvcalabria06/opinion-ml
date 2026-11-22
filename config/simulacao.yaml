@@ -13,10 +13,12 @@
 #   Persona = a mais parecida com a mistura de mídias que a pessoa avalia de verdade;
 #   atividade vem das avaliações reais; o gosto é comparado por mídia no encontro. n_usuarios, n_obras e
 #   semanas_historico_previo abaixo só valem para "sintetico".
+# lastfm: usuários, artistas e escutas REAIS (HetRec 2011); a amizade real é o rótulo e a rede do app;
+#   persona sorteada pelo peso, atividade igual para todos, encontros independentes da amizade.
 # sintetico: tudo inventado pelo simulador (como na Sprint 1).
 usuarios:
-  fonte: amazon2023
-  pasta: data/reais/amazon2023
+  fonte: lastfm
+  pasta: data/reais/lastfm
 
 simulacao:
   n_usuarios: 1200
@@ -71,31 +73,33 @@ personas:
 # instancias: quantos lugares desse tipo existem na cidade simulada
 # turnos: horários de início em que as pessoas se juntam (co-presença)
 # p_encontro: chance de dois desconhecidos no mesmo lugar/turno ficarem perto
+#   (experimento lastfm: valores originais x3 — 0,10/0,25/0,03/0,015 — para ter >= ~1000 pares
+#   amigos encontrados, ou seja >= ~150 no teste de 15%; ver docs/superpowers/specs)
 # duracao_mediana_s: duração típica de um encontro entre desconhecidos
 locais:
   cinema:
     instancias: 3
     turnos: ["14:00", "17:00", "19:30", "22:00"]
-    p_encontro: 0.10
+    p_encontro: 0.30
     duracao_mediana_s: 300
     dias: [0, 1, 2, 3, 4, 5, 6]
   livraria:
     instancias: 2
     turnos: ["10:00", "13:00", "16:00", "19:00"]
-    p_encontro: 0.25
+    p_encontro: 0.75
     duracao_mediana_s: 180
     dias: [0, 1, 2, 3, 4, 5, 6]
   campus:
     instancias: 4                # zonas: biblioteca, cantina, blocos de aula, área de convivência
     turnos: ["08:00", "09:30", "11:00", "12:30", "14:00", "15:30", "17:00", "18:30"]
-    p_encontro: 0.03
+    p_encontro: 0.09
     duracao_mediana_s: 120
     dias: [0, 1, 2, 3, 4]        # dias úteis
   convencao_games:
     instancias: 1
     turnos: ["10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00", "17:00", "18:00", "19:00"]
     turnos_por_visita: 3         # quem vai fica umas 3 horas
-    p_encontro: 0.015
+    p_encontro: 0.045
     duracao_mediana_s: 360
     semanas_com_evento: [3, 7, 11]   # fins de semana com convenção
 

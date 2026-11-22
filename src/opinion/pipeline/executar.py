@@ -46,7 +46,7 @@ def etapa_features(staging=PASTA_STAGING) -> dict:
 
 def etapa_label(staging=PASTA_STAGING) -> dict:
     f = ingestao.ler_staging(staging)
-    r, corte = label.calcular(f["encontros"], f["interacoes"], config())
+    r, corte = label.calcular(f["encontros"], f["interacoes"], config(), f["seguidores"])
     r.to_parquet(Path(staging) / "label.parquet", index=False)
     (Path(staging) / "_corte.json").write_text(json.dumps({"corte": str(corte)}))
     return {"rotulados": int(r.label_disponivel.sum()), "pendentes": int((r.label_disponivel == 0).sum()),

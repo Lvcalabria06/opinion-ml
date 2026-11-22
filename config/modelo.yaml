@@ -7,14 +7,20 @@
 
 mlflow:
   tracking_uri: sqlite:///mlruns/mlflow.db   # banco do MLflow junto dos artefatos, em mlruns/
-  experimento: opinion-cc3-aviso-categoria
-  modelo_registrado: opinion-baseline-cc3-aviso-categoria
+  experimento: opinion-cc3-lastfm
+  modelo_registrado: opinion-baseline-cc3-lastfm
   alias: champion
 
-# Métrica de escolha (seção 4.5 / decisão D-006): PR-AUC entre desconhecidos.
-# Sempre reportamos também PR-AUC geral, a prevalência e a regra simples.
-metrica: pr_auc_desconhecidos
-desconhecidos: algum_segue == 0
+# Público avaliado e métrica de escolha.
+#   publico: todos          -> experimento Last.fm: o recorte "desconhecidos" não existe; todos os
+#                              encontros são avaliados e PR-AUC geral é a métrica.
+#   publico: desconhecidos  -> linha principal (Amazon): avalia só encontros com algum_segue == 0 e a
+#                              métrica pr_auc vira automaticamente pr_auc_desconhecidos (decisão D-006).
+# Para restaurar a linha principal basta trocar `publico` para "desconhecidos" (a métrica é derivada
+# do público em treinar.chave_metrica); restaure também os nomes MLflow sem o sufixo -lastfm
+# (mlflow.* e comparacao.*) para não misturar as linhas. Sempre reportamos também a prevalência e a regra simples.
+metrica: pr_auc
+publico: todos
 
 candidatos:
   regressao_logistica:
@@ -28,12 +34,11 @@ candidatos:
       max_depth: [4, 6, 8]
       min_samples_leaf: [20, 50]
 
-# Limiar de decisão: maximiza F-beta nos desconhecidos da validação. beta = 0,5 pesa a
+# Limiar de decisão: maximiza F-beta no público avaliado (ver `publico`) da validação. beta = 0,5 pesa a
 # precisão o dobro do recall (um sinal errado cansa o usuário). A regra simples recebe o
 # mesmo tratamento: o limiar do compat_score também é escolhido na validação.
 limiar:
   beta: 0.5
-  publico: desconhecidos
 
 # =====================================================================
 # CC4 — comparação de 3+ modelos (python -m opinion.modelo.comparar)
@@ -44,8 +49,8 @@ limiar:
 # (Optuna) e validação cruzada/estabilidade é o CC6.
 # =====================================================================
 comparacao:
-  experimento: opinion-cc4-aviso-categoria
-  modelo_registrado: opinion-cc4-aviso-categoria
+  experimento: opinion-cc4-lastfm
+  modelo_registrado: opinion-cc4-lastfm
   alias: melhor
   referencia: regressao_logistica           # o baseline do CC3, contra quem as diferenças são medidas
   bootstrap: {n: 1000, semente: 0}          # intervalo de confiança das diferenças no teste

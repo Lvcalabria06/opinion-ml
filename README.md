@@ -168,6 +168,20 @@ python -m opinion.checkpoint2 --usuarios usr-00694 usr-01029  # aviso musical
 mlflow ui --backend-store-uri sqlite:///mlruns/mlflow.db   # http://localhost:5000
 ```
 
+### Experimento Last.fm (branch `experimento-lastfm`)
+
+Variante com amizades reais: o label é "os dois são amigos no Last.fm" ([D-014](docs/decisoes.md)).
+
+```bash
+# baixe hetrec2011-lastfm-2k em https://grouplens.org/datasets/hetrec-2011/ e extraia em data/externo/lastfm/
+python -m opinion.fontes.lastfm            # gera data/reais/lastfm/
+python -m opinion.gerar_bootstrap
+python -m opinion.pipeline.executar --fonte arquivos
+python -m opinion.modelo.treinar && python -m opinion.checkpoint2 && python -m opinion.modelo.comparar
+```
+
+Licença não comercial; fonte e limitações em [`docs/fontes_dados.md`](docs/fontes_dados.md).
+
 ## Sprint 4 — CC4: comparação de modelos
 
 `src/opinion/modelo/comparar.py` compara Regressão logística, Árvore de decisão, Random Forest e

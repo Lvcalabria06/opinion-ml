@@ -4,7 +4,31 @@
 > (feita, em revisão, bloqueada) ou quando uma decisão for tomada. Decisões com justificativa
 > vão também para [`decisoes.md`](decisoes.md).
 
-Última atualização: **18/11/2026**. Branch `main`.
+Última atualização: **22/11/2026**. Branch `experimento-lastfm` (experimento sobre a `main`).
+
+## Experimento Last.fm (branch `experimento-lastfm`)
+
+CC1 a CC4 refeitos com o HetRec 2011 Last.fm e a pergunta "dois usuários se encontraram; qual a chance
+de serem amigos?" ([D-014](decisoes.md), [fonte](fontes_dados.md)). Teste: 24.497 encontros, 184 encontros
+positivos (176 pares), prevalência 0,0075.
+
+| Modelo | PR-AUC | ROC-AUC |
+|---|---|---|
+| Regressão logística (baseline CC3) | 0,063 | 0,837 |
+| Regra simples (`compat_score`) | 0,027 | 0,724 |
+| Jaccard de artistas sozinho (medição pontual da equipe, mesmo split de teste) | 0,057 | 0,824 |
+| Random Forest (escolhido no CC4 pela validação) | 0,055 (IC 0,041–0,074) | 0,833 |
+
+No teste a regressão logística ficou em primeiro; Random Forest contra a regra: +0,027 (IC +0,014 a +0,044).
+Checkpoint 2 OK. MLflow: `opinion-cc3-lastfm`, `opinion-baseline-cc3-lastfm`, `opinion-cc4-lastfm`,
+`opinion-cc4-lastfm@melhor`. Validação da simulação: 13 OK (modo amizade; cenários de sensibilidade não
+se aplicam). Notebook reexecutado, 12 figuras.
+
+Pendências do experimento: CC5 e CC6; teste de MQTT e Docker de ponta a ponta (Docker desligado, não
+verificado); validação do professor para o novo problema. Limitações: sem datas de amizade (sem split
+temporal, possível causalidade reversa), encontros sem sinal real do label, ~1,9 mil usuários, licença não comercial.
+
+Os números abaixo, até a próxima seção de pendências, descrevem a `main` (Amazon).
 
 ## Entregas e estado atual
 

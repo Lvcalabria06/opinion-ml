@@ -2,7 +2,7 @@
 Etapa 5 — Preparação do dataset do modelo.
 
   * junta compatibilidade + features + label
-  * marca o split temporal (treino 1–8 / validação 9–10 / teste 11–12) e a purga da fronteira
+  * marca o split (config split.tipo: pares 70/15/15 por par, ou temporal 1–8 / 9–10 / 11–12 com purga)
   * imputação simples (com indicador) e one-hot das categóricas
   * checagens de qualidade (a DAG falha se algo estiver fora do esperado)
   * grava:
@@ -44,7 +44,24 @@ GRUPOS = {
 }
 
 
+def split_por_pares(par_id: pd.Series, conectou: pd.Series, cfg: dict) -> pd.Series:
+    """Cada par inteiro vai para um só split (70/15/15, semente fixa). Estratificado por 'par com
+    algum positivo', para que treino, validação e teste tenham positivos."""
+    prop, rng = cfg["split"]["proporcoes"], np.random.default_rng(cfg["split"].get("semente", 7))
+    tem_pos = pd.Series(np.asarray(conectou, dtype=float) == 1, index=par_id.index).groupby(par_id).max().sort_index()
+    destino = {}
+    for grupo in (tem_pos[tem_pos], tem_pos[~tem_pos]):
+        ids = rng.permutation(np.asarray(grupo.index, dtype=object))
+        n = len(ids)
+        c1, c2 = round(n * prop["treino"]), round(n * (prop["treino"] + prop["validacao"]))
+        for i, par in enumerate(ids):
+            destino[par] = "treino" if i < c1 else "validacao" if i < c2 else "teste"
+    return par_id.map(destino).astype(object)
+
+
 def marcar_split(df: pd.DataFrame, cfg: dict) -> pd.Series:
+    if cfg["split"].get("tipo", "temporal") == "pares":
+        return split_por_pares(df.par_id, df.conectou, cfg)
     s = pd.Series("fora_do_periodo", index=df.index, dtype=object)
     for nome in ("treino", "validacao", "teste"):
         ini, fim = cfg["split"][nome]
@@ -73,9 +90,15 @@ def completar(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def codificar(df: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
+def colunas_numericas(cfg: dict | None = None) -> list[str]:
+    """NUMERICAS menos as que o config manda excluir (features.excluir)."""
+    excluir = set(((cfg or {}).get("features") or {}).get("excluir") or [])
+    return [c for c in NUMERICAS if c not in excluir]
+
+
+def codificar(df: pd.DataFrame, cfg: dict | None = None) -> tuple[pd.DataFrame, list[str]]:
     dummies = pd.get_dummies(df[CATEGORICAS], prefix=CATEGORICAS, dtype=int)
-    X = pd.concat([df[NUMERICAS], dummies], axis=1)
+    X = pd.concat([df[colunas_numericas(cfg)], dummies], axis=1)
     return X, list(X.columns)
 
 
@@ -114,7 +137,7 @@ def executar(encontros, compat, feats, rot, corte, cfg, pasta_saida: Path, refer
 
     dm = df[(df.label_disponivel == 1) & df.split.isin(["treino", "validacao", "teste"])].copy()
     dm["conectou"] = dm.conectou.astype(int)
-    X, colunas_x = codificar(dm)
+    X, colunas_x = codificar(dm, cfg)
     ident = ["encontro_id", "par_id", "usuario_a", "usuario_b", "inicio", "fim", "semana", "split", "local"]
     saida = pd.concat([dm[ident].rename(columns={"local": "local_original"}), X, dm[["conectou"]]], axis=1)
 
@@ -144,7 +167,7 @@ def executar(encontros, compat, feats, rot, corte, cfg, pasta_saida: Path, refer
         "por_split": {k: {"encontros": int(v.encontros), "taxa_conexao": round(float(v.taxa_conexao), 4),
                           "pares": int(v.pares)} for k, v in por_split.iterrows()},
         "colunas_features": colunas_x,
-        "grupos_features": GRUPOS,
+        "grupos_features": {g: [c for c in cols if c in colunas_x] for g, cols in GRUPOS.items()},
         "coluna_label": "conectou",
         "coluna_grupo_cv": "par_id",
         "concordancia_label_referencia": concordancia,

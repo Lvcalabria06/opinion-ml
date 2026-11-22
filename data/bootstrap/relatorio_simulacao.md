@@ -1,56 +1,52 @@
 # Relatório da simulação — bootstrap dataset OpiniOn (CC1)
 
-Semente 42 · 1200 usuários · 12 semanas (06/07/2026 a 27/09/2026) · todos os parâmetros são premissas da equipe (`config/simulacao.yaml`).
+Semente 42 · 1892 usuários · 12 semanas (06/07/2026 a 27/09/2026) · todos os parâmetros são premissas da equipe (`config/simulacao.yaml`).
 
-> Dados **sintéticos**. Qualquer desempenho medido com eles é desempenho sobre a simulação, não sobre o comportamento real dos usuários.
+> Os **encontros** são simulados (local, hora, duração e RSSI são premissas da equipe); usuários, gostos e o **rótulo** (amizade no Last.fm) são reais. Os encontros não olham a amizade; o desempenho medido é sobre essa combinação, não sobre o comportamento real em campo.
 
 ## Volume
 
 | Item | Quantidade |
 |---|---|
-| usuarios | 1,200 |
-| obras | 48,018 |
-| avaliacoes | 58,251 |
-| seguidores | 5,670 |
-| interacoes | 38,426 |
-| encontros | 69,384 |
-| toques_interesse | 4,443 |
-| trocas_de_modo | 2,343 |
+| usuarios | 1,892 |
+| obras | 17,632 |
+| avaliacoes | 92,834 |
+| seguidores | 25,434 |
+| interacoes | 0 |
+| encontros | 162,897 |
+| toques_interesse | 9,791 |
+| trocas_de_modo | 3,689 |
 
-## Label `conectou` (interação em até 48 h)
+## Label `conectou` (amizade real no Last.fm)
 
-- Encontros com label positivo: **8.1%** (problema desbalanceado, como esperado)
-- Encontros que de fato *causaram* conexão (variável oculta): 0.8%
-- Conexões causadas cuja 1ª interação veio depois de 48 h (label = 0 mesmo assim): 3.1%
-- Positivos entre amigos (que já se seguem): 27.6% · entre desconhecidos: 1.2%
-
-A diferença entre *conectou* e *causou* é intencional: amigos interagem no app de qualquer jeito, e algumas conexões só acontecem depois da janela. O modelo precisa lidar com esse ruído.
+- Encontros com label positivo (os dois já são amigos no Last.fm): **0.8%** (1,235 encontros, 1,171 pares) — problema desbalanceado, como a rede de amizades da população
+- O rótulo é estático: não depende da data do encontro nem de nenhuma janela; a divisão treino/validação/teste é feita por par de usuários (D-014).
 
 ## Por contexto
 
 | Local | Encontros | % conectou | Duração mediana | RSSI médio |
 |---|---|---|---|---|
-| campus | 19,267 | 12.9% | 262 s | -60.2 dBm |
-| cinema | 13,495 | 9.3% | 463 s | -61.1 dBm |
-| convencao_games | 8,029 | 6.9% | 459 s | -61.6 dBm |
-| livraria | 28,593 | 4.6% | 209 s | -62.1 dBm |
+| campus | 63,799 | 0.7% | 120 s | -62.9 dBm |
+| cinema | 31,469 | 0.8% | 299 s | -62.9 dBm |
+| convencao_games | 33,396 | 0.9% | 362 s | -62.9 dBm |
+| livraria | 34,233 | 0.8% | 180 s | -62.9 dBm |
 
-## Por semana (para o split temporal 1–8 / 9–10 / 11–12)
+## Por semana
 
 | Semana | Encontros | % conectou |
 |---|---|---|
-| 1 | 5,238 | 7.6% |
-| 2 | 5,470 | 8.2% |
-| 3 | 8,305 | 8.3% |
-| 4 | 5,103 | 8.1% |
-| 5 | 5,147 | 7.7% |
-| 6 | 4,869 | 8.9% |
-| 7 | 8,043 | 7.7% |
-| 8 | 5,138 | 8.2% |
-| 9 | 4,915 | 8.2% |
-| 10 | 5,186 | 8.8% |
-| 11 | 7,142 | 7.5% |
-| 12 | 4,828 | 8.7% |
+| 1 | 11,493 | 0.7% |
+| 2 | 11,220 | 0.7% |
+| 3 | 22,910 | 0.8% |
+| 4 | 11,203 | 0.9% |
+| 5 | 10,624 | 0.7% |
+| 6 | 11,092 | 0.7% |
+| 7 | 21,669 | 0.8% |
+| 8 | 10,648 | 0.7% |
+| 9 | 10,729 | 0.6% |
+| 10 | 10,339 | 0.8% |
+| 11 | 20,829 | 0.8% |
+| 12 | 10,141 | 0.7% |
 
 Picos nas semanas 3, 7 e 11 = fins de semana com convenção de games.
 
@@ -58,9 +54,9 @@ Picos nas semanas 3, 7 e 11 = fins de semana com convenção de games.
 
 | Persona | Encontros | % conectou | Duração mediana | RSSI médio |
 |---|---|---|---|---|
-| cinefilo | 19,261 | 8.4% | 318 s | -61.3 dBm |
-| estudante_casual | 8,507 | 9.0% | 290 s | -61.1 dBm |
-| gamer_social | 8,508 | 9.1% | 344 s | -61.2 dBm |
-| leitor_reservado | 32,660 | 7.4% | 248 s | -61.5 dBm |
-| maratonista_series | 448 | 12.9% | 418 s | -60.1 dBm |
+| cinefilo | 35,706 | 0.8% | 219 s | -62.9 dBm |
+| estudante_casual | 39,291 | 0.7% | 162 s | -62.8 dBm |
+| gamer_social | 39,646 | 0.8% | 239 s | -62.9 dBm |
+| leitor_reservado | 34,496 | 0.7% | 169 s | -62.9 dBm |
+| maratonista_series | 13,758 | 0.8% | 208 s | -62.8 dBm |
 

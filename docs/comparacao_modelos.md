@@ -1,30 +1,26 @@
 # Comparação de modelos — OpiniOn (CC4)
 
-**Experimento histórico.** Este relatório foi gerado antes da regeneração do bootstrap com a
-regra de aviso por categoria. Seus números e figuras não descrevem os dados atuais.
-Consulte [os resultados por mídia](match_por_midia.md) para a versão em uso.
+Gerado por `python -m opinion.modelo.comparar` em 22/11/2026 17:29. Números do teste medidos **uma vez** por modelo; nada foi escolhido com eles.
 
-Gerado por `python -m opinion.modelo.comparar` em 18/11/2026 23:19. Números do teste medidos **uma vez** por modelo; nada foi escolhido com eles.
-
-> Usuários, obras e notas são reais (Amazon Reviews 2023); encontros e o label `conectou` são simulados ([`fontes_dados.md`](fontes_dados.md)). As métricas medem quão bem cada modelo recupera o processo da simulação, não o comportamento de usuários reais da pulseira.
+> Usuários, obras, notas e o rótulo `conectou` (amizade no Last.fm) são reais (HetRec 2011 Last.fm, [`fontes_dados.md`](fontes_dados.md)); só os encontros são simulados, **independentes da amizade**. O rótulo é estático (as amizades não têm data): as métricas mostram quanto o gosto musical acompanha a amizade, não que o encontro a causou, e amigos se influenciam (o gosto pode ser efeito da amizade).
 
 ## 1. Protocolo
 
-- **Mesmos dados e split do CC3:** treino semanas 1–8 (44.254 encontros), validação 9–10, teste 11–12; purga na fronteira treino/validação.
-- **Cada família** tem uma grade pequena e fixa (`config/modelo.yaml → comparacao`). A configuração e o limiar do sinal (F0,5 entre desconhecidos) são escolhidos na validação. Otimização de hiperparâmetros fica para o CC5 (Optuna) e validação cruzada para o CC6.
-- **Escolha do melhor modelo:** pr_auc_desconhecidos na validação. A regra simples (`compat_score`) recebe o mesmo protocolo, com limiar próprio.
-- **Incerteza:** intervalo de confiança de 95% por bootstrap pareado (5 pontuações, mesmas reamostras para todas) no teste, entre desconhecidos.
+- **Mesmos dados e split do CC3:** divisão por par (cada par inteiro em treino, validação ou teste), treino com 114.033 encontros.
+- **Cada família** tem uma grade pequena e fixa (`config/modelo.yaml → comparacao`). A configuração e o limiar do sinal (F0,5 em todos os encontros) são escolhidos na validação. Otimização de hiperparâmetros fica para o CC5 (Optuna) e validação cruzada para o CC6.
+- **Escolha do melhor modelo:** pr_auc na validação. A regra simples (`compat_score`) recebe o mesmo protocolo, com limiar próprio.
+- **Incerteza:** intervalo de confiança de 95% por bootstrap pareado (5 pontuações, mesmas reamostras para todas) no teste, em todos os encontros.
 
 ## 2. Resultado
 
-| Modelo | PR-AUC desc. (valid.) | PR-AUC desc. (teste, IC 95%) | PR-AUC geral (teste) | ROC-AUC desc. (teste) | Brier (teste) |
-|---|---|---|---|---|---|
-| Gradient Boosting **(escolhido)** | 0,135 | 0,143 (0,126–0,162) | 0,247 | 0,672 | 0,103 |
-| Random Forest | 0,134 | 0,147 (0,130–0,167) | 0,250 | 0,675 | 0,103 |
-| Regressão logística | 0,134 | 0,152 (0,135–0,173) | 0,243 | 0,681 | 0,205 |
-| Árvore de decisão | 0,105 | 0,120 (0,107–0,135) | 0,231 | 0,624 | 0,107 |
-| Regra simples | 0,092 | 0,104 (0,093–0,118) | 0,149 | 0,586 | não se aplica |
-| *acaso* | | *0,077* | *0,128* | *0,500* | *0,112* (constante) |
+| Modelo | PR-AUC (valid.) | PR-AUC (teste, IC 95%) | ROC-AUC (teste) | Brier (teste) |
+|---|---|---|---|---|
+| Random Forest **(escolhido)** | 0,061 | 0,055 (0,041–0,074) | 0,833 | 0,007 |
+| Regressão logística | 0,061 | 0,063 (0,046–0,092) | 0,837 | 0,007 |
+| Árvore de decisão | 0,057 | 0,039 (0,028–0,056) | 0,741 | 0,007 |
+| Gradient Boosting | 0,050 | 0,053 (0,039–0,078) | 0,827 | 0,007 |
+| Regra simples | 0,027 | 0,027 (0,020–0,040) | 0,724 | não se aplica |
+| *acaso* | | *0,008* | *0,500* | *0,007* (constante) |
 
 ![PR-AUC com IC](img/cc4/pr_auc_ic.png)
 
@@ -32,51 +28,50 @@ Gerado por `python -m opinion.modelo.comparar` em 18/11/2026 23:19. Números do 
 
 ![Curvas ROC](img/cc4/curvas_roc.png)
 
-## 3. No ponto de operação (desconhecidos, teste)
+## 3. No ponto de operação (todos os encontros, teste)
 
-Esta seção avalia uma política de sinal da rodada histórica. O protótipo atual avisa por
-categoria na proximidade, conforme o corte fixado em `config/pipeline.yaml`.
+O limiar do modelo é uma avaliação acadêmica. O aviso do protótipo usa o corte por categoria na proximidade.
 
 | Modelo | Limiar | Precisão | Recall | F0,5 | Sinal em | VP | FP | FN | VN |
 |---|---|---|---|---|---|---|---|---|---|
-| Gradient Boosting | 0,131 | 18,2% | 17,8% | 0,181 | 7,6% | 119 | 536 | 549 | 7.435 |
-| Random Forest | 0,128 | 18,8% | 17,1% | 0,185 | 7,0% | 114 | 491 | 554 | 7.480 |
-| Regressão logística | 0,447 | 17,8% | 25,7% | 0,189 | 11,2% | 172 | 797 | 496 | 7.174 |
-| Árvore de decisão | 0,160 | 14,6% | 13,2% | 0,143 | 7,0% | 88 | 516 | 580 | 7.455 |
-| Regra simples | 0,666 | 12,4% | 22,6% | 0,137 | 14,1% | 151 | 1.063 | 517 | 6.908 |
+| Random Forest | 0,076 | 9,5% | 14,1% | 0,102 | 1,1% | 26 | 248 | 158 | 24.065 |
+| Regressão logística | 0,134 | 14,8% | 7,1% | 0,121 | 0,4% | 13 | 75 | 171 | 24.238 |
+| Árvore de decisão | 0,185 | 9,9% | 5,4% | 0,085 | 0,4% | 10 | 91 | 174 | 24.222 |
+| Gradient Boosting | 0,070 | 9,3% | 15,2% | 0,101 | 1,2% | 28 | 273 | 156 | 24.040 |
+| Regra simples | 0,866 | 4,8% | 7,6% | 0,051 | 1,2% | 14 | 280 | 170 | 24.033 |
 
 ![Matrizes de confusão](img/cc4/matrizes_confusao.png)
 
-## 4. Diferenças e incerteza (PR-AUC entre desconhecidos, teste)
+## 4. Diferenças e incerteza (PR-AUC em todos os encontros, teste)
 
 | Modelo | vs Regressão logística (IC 95%) | vs regra simples (IC 95%) |
 |---|---|---|
-| Gradient Boosting | -0,010 (-0,019 a +0,001) | +0,038 (+0,025 a +0,054) |
-| Random Forest | -0,005 (-0,016 a +0,006) | +0,043 (+0,030 a +0,059) |
-| Regressão logística | — | +0,048 (+0,034 a +0,063) |
-| Árvore de decisão | -0,033 (-0,048 a -0,018) | +0,015 (+0,003 a +0,029) |
+| Random Forest | -0,008 (-0,026 a +0,000) | +0,027 (+0,014 a +0,044) |
+| Regressão logística | — | +0,036 (+0,018 a +0,063) |
+| Árvore de decisão | -0,025 (-0,049 a -0,008) | +0,011 (-0,003 a +0,028) |
+| Gradient Boosting | -0,010 (-0,027 a +0,004) | +0,026 (+0,011 a +0,048) |
 
-## 5. Precisão do sinal por contexto (desconhecidos, teste)
+## 5. Precisão do sinal por contexto (todos os encontros, teste)
 
-| Local | Encontros | Taxa real | Gradient Boosting | Random Forest | Regressão logística | Árvore de decisão | Regra simples |
+| Local | Encontros | Taxa real | Random Forest | Regressão logística | Árvore de decisão | Gradient Boosting | Regra simples |
 |---|---|---|---|---|---|---|---|
-| campus | 1.675 | 3,2% | 0,0% (0,3%) | 25,0% (0,2%) | 7,7% (1,6%) | 4,0% (3,0%) | 6,4% (12,1%) |
-| cinema | 1.564 | 10,4% | 17,9% (10,4%) | 17,5% (10,9%) | 16,4% (18,3%) | 14,5% (11,0%) | 14,2% (14,8%) |
-| convencao_games | 2.044 | 11,6% | 20,2% (17,7%) | 19,3% (17,3%) | 18,7% (25,9%) | 21,0% (8,6%) | 18,5% (12,7%) |
-| livraria | 3.356 | 6,3% | 13,5% (3,8%) | 19,5% (2,3%) | 18,8% (3,8%) | 11,7% (6,1%) | 11,0% (15,5%) |
+| campus | 9.624 | 0,7% | 9,3% (1,0%) | 25,0% (0,4%) | 13,9% (0,4%) | 9,4% (1,2%) | 3,8% (1,1%) |
+| cinema | 4.688 | 0,9% | 16,3% (0,9%) | 6,7% (0,3%) | 15,8% (0,4%) | 11,4% (0,9%) | 6,5% (1,3%) |
+| convencao_games | 5.012 | 0,8% | 6,8% (1,5%) | 5,0% (0,4%) | 4,2% (0,5%) | 10,5% (1,5%) | 4,3% (1,4%) |
+| livraria | 5.173 | 0,8% | 8,2% (1,2%) | 11,8% (0,3%) | 4,5% (0,4%) | 6,2% (1,2%) | 5,2% (1,1%) |
 
 Cada célula: precisão (fração de encontros com sinal).
 
 ## 6. O que cada modelo usa (importância por permutação, validação)
 
-Queda de PR-AUC entre desconhecidos quando a feature é embaralhada. Top 5 de cada modelo:
+Queda de PR-AUC em todos os encontros quando a feature é embaralhada. Top 5 de cada modelo:
 
 | Modelo | 1º | 2º | 3º | 4º | 5º |
 |---|---|---|---|---|---|
-| Gradient Boosting | `log_duracao` (+0,031) | `compat_score` (+0,015) | `historico_comum_filme` (+0,007) | `compat_score_livro` (+0,007) | `algum_modo_discreto` (+0,006) |
-| Random Forest | `log_duracao` (+0,027) | `local_cinema` (+0,006) | `compat_score_livro` (+0,003) | `local_livraria` (+0,003) | `historico_comum_filme` (+0,003) |
-| Regressão logística | `compat_score_livro` (+0,054) | `match_musica` (+0,042) | `compat_score_musica` (+0,038) | `compat_score_filme` (+0,034) | `compat_score_jogo` (+0,027) |
-| Árvore de decisão | `compat_score` (+0,020) | `log_duracao` (+0,016) | `compat_score_livro` (+0,006) | `local_cinema` (+0,005) | `sim_generos` (+0,005) |
+| Random Forest | `n_obras_comuns` (+0,024) | `favoritas_comuns` (+0,013) | `sim_notas` (+0,004) | `match_musica` (+0,004) | `tem_obras_comuns` (+0,003) |
+| Regressão logística | `n_obras_comuns` (+0,035) | `favoritas_comuns` (+0,013) | `tem_obras_comuns` (+0,012) | `compat_score` (+0,002) | `compat_score_musica` (+0,002) |
+| Árvore de decisão | `n_obras_comuns` (+0,044) | `favoritas_comuns` (+0,029) | `sim_generos` (+0,025) | `rssi_medio` (+0,012) | `dia_semana` (+0,007) |
+| Gradient Boosting | `n_obras_comuns` (+0,035) | `favoritas_comuns` (+0,013) | `sim_notas` (+0,004) | `hora` (+0,002) | `dia_semana` (+0,001) |
 
 ![Importância](img/cc4/importancia.png)
 
@@ -84,26 +79,25 @@ Queda de PR-AUC entre desconhecidos quando a feature é embaralhada. Top 5 de ca
 
 | Modelo | Configurações testadas | Treino por configuração | Pontuação por encontro |
 |---|---|---|---|
-| Gradient Boosting | 4 | 0,5 s | 0,002 ms |
-| Random Forest | 4 | 1,0 s | 0,005 ms |
-| Regressão logística | 6 | 0,1 s | 0,001 ms |
-| Árvore de decisão | 6 | 0,1 s | 0,001 ms |
+| Random Forest | 4 | 3,7 s | 0,005 ms |
+| Regressão logística | 6 | 0,3 s | 0,001 ms |
+| Árvore de decisão | 6 | 0,3 s | 0,001 ms |
+| Gradient Boosting | 4 | 0,6 s | 0,002 ms |
 
 ## 8. Análise crítica
 
-- **Escolhido na validação: Gradient Boosting** (0,135). No teste a ordem muda (1º no teste: Regressão logística): as diferenças entre eles são pequenas o bastante para mudar de posição com outra amostra.
-- **Contra o baseline (Regressão logística):** -0,010 de PR-AUC (IC 95% -0,019 a +0,001). O intervalo inclui zero: **não dá para afirmar que o modelo mais complexo é melhor que o baseline** com estes dados.
-- **Contra a regra simples:** +0,038 de PR-AUC (IC 95% +0,025 a +0,054) — o modelo supera a regra de forma consistente.
-- **No ponto de operação**, Gradient Boosting acerta 18,2% dos sinais (recall 17,8%, sinal em 7,6% dos encontros); a regra, 12,4% (recall 22,6%, sinal em 14,1%). A vantagem aparece também na precisão do sinal, que é o que o usuário sente.
-- **Calibração:** prever sempre a prevalência dá Brier 0,112. Regressão logística fica pior que isso (probabilidades infladas, efeito de `class_weight=balanced`); Árvore de decisão, Random Forest e Gradient Boosting ficam melhor. A ordenação e o limiar não dependem disso, mas a probabilidade só pode ser mostrada como chance real (dashboard, faixas de sinal) depois de calibrada.
-- **O que os modelos aprendem:** as 3 features mais importantes variam entre os modelos. Lembrete: a importância reflete as premissas do simulador, não uma descoberta sobre usuários.
-- **Margem:** o teto do simulador (a probabilidade escondida) chega a PR-AUC 0,340 e precisão 38,3% com a mesma taxa de sinal; Gradient Boosting está em 0,143 e 18,2%. A parte que falta vem do que nenhum dado observa (a abertura social de cada pessoa) e do sorteio do resultado.
-- **Custo:** Gradient Boosting pontua um encontro em 0,002 ms, sem impedimento para o sinal em tempo real (CC7).
-- **Recomendação para o CC5:** otimizar Gradient Boosting com Optuna, mantendo o baseline como referência explicável.
+- **Escolhido na validação: Random Forest** (0,061). No teste a ordem muda (1º no teste: Regressão logística): as diferenças entre eles são pequenas o bastante para mudar de posição com outra amostra.
+- **Contra o baseline (Regressão logística):** -0,008 de PR-AUC (IC 95% -0,026 a +0,000). O intervalo inclui zero: **não dá para afirmar que o modelo mais complexo é melhor que o baseline** com estes dados.
+- **Contra a regra simples:** +0,027 de PR-AUC (IC 95% +0,014 a +0,044) — o modelo supera a regra de forma consistente.
+- **No ponto de operação**, Random Forest acerta 9,5% dos sinais (recall 14,1%, sinal em 1,1% dos encontros); a regra, 4,8% (recall 7,6%, sinal em 1,2%). A vantagem aparece também na precisão do sinal, que é o que o usuário sente.
+- **Calibração:** prever sempre a prevalência dá Brier 0,007. Árvore de decisão fica pior que isso; Regressão logística, Random Forest e Gradient Boosting ficam melhor. A ordenação e o limiar não dependem disso, mas a probabilidade só pode ser mostrada como chance real (dashboard, faixas de sinal) depois de calibrada.
+- **O que os modelos aprendem:** todos têm `favoritas_comuns`, `n_obras_comuns` entre as 3 features mais importantes. Lembrete: o rótulo é amizade real no Last.fm, mas estática (sem data), e os encontros são simulados; a importância mostra associação com a amizade, não causa.
+- **Custo:** Random Forest pontua um encontro em 0,005 ms, sem impedimento para o sinal em tempo real (CC7).
+- **Recomendação para o CC5:** otimizar Random Forest com Optuna, mantendo o baseline como referência explicável.
 
 ## 9. Limitações
 
-- **Label simulado.** O ranking dos modelos vale para o processo da simulação. Com outras premissas (ver os cenários em [`validacao_simulacao.md`](validacao_simulacao.md)) a ordem entre modelos próximos pode mudar.
-- **Um único split temporal.** O IC do bootstrap cobre a variação de amostragem do teste, não a de treinar em outras semanas. Estabilidade entre folds é o CC6.
+- **Rótulo estático e possível causalidade invertida.** A amizade não tem data: não dá para afirmar que o gosto antecede a amizade nem que o encontro a causou (amigos se influenciam).
+- **Encontros simulados, independentes da amizade.** Local, duração e RSSI não carregam sinal real do rótulo; o poder preditivo vem do gosto musical (Last.fm).
+- **Um único split por par.** O IC do bootstrap cobre a variação de amostragem do teste, não a de outras divisões; estabilidade entre folds é o CC6.
 - **Grades fixas e pequenas.** Um modelo pode ter perdido só por falta de ajuste; o CC5 otimiza o vencedor com Optuna.
-- **Teto do simulador.** Só existe porque os dados são simulados; serve para dimensionar a margem, não como meta realista.

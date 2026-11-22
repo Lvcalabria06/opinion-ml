@@ -57,8 +57,11 @@ def carregar_reais(pasta: Path) -> dict[str, pd.DataFrame]:
     if not (pasta / "avaliacoes.csv").exists():
         raise FileNotFoundError(f"{pasta} não tem os dados reais. Rode: python -m opinion.fontes.amazon2023 tudo")
     av = pd.read_csv(pasta / "avaliacoes.csv", parse_dates=["criado_em"])
-    return {"usuarios": pd.read_csv(pasta / "usuarios.csv"), "obras": pd.read_csv(pasta / "obras.csv"),
-            "avaliacoes": av.sort_values(["criado_em", "avaliacao_id"]).reset_index(drop=True)}
+    reais = {"usuarios": pd.read_csv(pasta / "usuarios.csv"), "obras": pd.read_csv(pasta / "obras.csv"),
+             "avaliacoes": av.sort_values(["criado_em", "avaliacao_id"]).reset_index(drop=True)}
+    if (pasta / "amizades.csv").exists():  # lastfm: amizades reais (usuario_a < usuario_b)
+        reais["amizades"] = pd.read_csv(pasta / "amizades.csv")
+    return reais
 
 
 class Simulador:
@@ -72,6 +75,8 @@ class Simulador:
         self.fonte = cfg.get("usuarios", {}).get("fonte", "sintetico")
         self.reais = carregar_reais(cfg["usuarios"]["pasta"]) if self.fonte != "sintetico" else None
         self.n = len(self.reais["usuarios"]) if self.reais else s["n_usuarios"]
+        # lastfm: encontros e rede simulados NÃO dependem da amizade; ela só vira rótulo e seguidores
+        self.lastfm = self.fonte == "lastfm"
 
     # ================================================================ catálogo
     def gerar_obras(self):
@@ -115,7 +120,13 @@ class Simulador:
         rng, P = self.rng, self.cfg["personas"]
         if self.reais:
             self.uid = self.reais["usuarios"].usuario_id.tolist()
-            self._perfil_real()
+            if self.lastfm:  # só música: a mistura de mídias não discrimina; persona pelo peso, atividade igual
+                nomes = list(P)
+                pesos = np.array([P[p]["peso"] for p in nomes]); pesos /= pesos.sum()
+                self.persona = rng.choice(nomes, size=self.n, p=pesos)
+                self.atividade = np.ones(self.n)
+            else:
+                self._perfil_real()
         else:
             nomes = list(P)
             pesos = np.array([P[p]["peso"] for p in nomes]); pesos /= pesos.sum()
@@ -151,6 +162,9 @@ class Simulador:
 
     # ================================================================ amigos e seguidores
     def gerar_rede(self):
+        if self.lastfm:
+            self._rede_lastfm()
+            return
         rng, A = self.rng, self.cfg["amigos"]
         ordem = rng.permutation(self.n)
         alvo = int(self.n * A["fracao_em_grupos"])
@@ -178,6 +192,20 @@ class Simulador:
             for b in rng.choice(self.n, size=rng.poisson(3), p=peso):
                 if b != a and (a, int(b)) not in self.segue:
                     self.segue[(a, int(b))] = self.inicio - timedelta(days=int(rng.integers(1, 200)))
+
+    def _rede_lastfm(self):
+        """Sem grupos de amigos simulados; seguidores = amizades reais (as duas direções)."""
+        self.grupo = np.full(self.n, -1)
+        self.membros = {}
+        idx = {u: i for i, u in enumerate(self.uid)}
+        perfil = dict(zip(self.reais["usuarios"].usuario_id, pd.to_datetime(self.reais["usuarios"].primeira_avaliacao)))
+        self.segue = {}
+        self.amigos_reais: set[tuple[str, str]] = set()
+        for a, b in zip(self.reais["amizades"].usuario_a, self.reais["amizades"].usuario_b):
+            self.amigos_reais.add((a, b) if a < b else (b, a))
+            desde = max(perfil[a], perfil[b]).to_pydatetime()  # data do perfil, antes do início da simulação
+            self.segue[(idx[a], idx[b])] = desde
+            self.segue[(idx[b], idx[a])] = desde
 
     def sao_amigos(self, a: int, b: int) -> bool:
         return self.grupo[a] >= 0 and self.grupo[a] == self.grupo[b]
@@ -301,8 +329,8 @@ class Simulador:
     def simular(self):
         rng, L, A, C = self.rng, self.cfg["locais"], self.cfg["amigos"], self.cfg["conexao"]
         T = self.cfg["toque_interesse"]
-        antes = self.perfis_temporais()
-        politica = config_pipeline()
+        antes = None if self.lastfm else self.perfis_temporais()
+        politica = None if self.lastfm else config_pipeline()
         self.encontros, self.toques, self.interacoes, self.ocultos = [], [], [], []
         n_anteriores: dict[tuple[int, int], int] = defaultdict(int)
         seq = 0
@@ -341,18 +369,21 @@ class Simulador:
                     })
                     # ------------------------------------------ processo do label (oculto)
                     seguem_mutuo = (a, b) in self.segue and (b, a) in self.segue
-                    discreto = "discreto" in (self.modo_em(a, inicio), self.modo_em(b, inicio))
-                    scores = afinidades(antes(self.uid[a], inicio), antes(self.uid[b], inicio), politica)
-                    midias = motivos_do_sinal(scores, politica)
-                    z = (C["intercepto"] + C["compat"] * bool(midias)
-                         + C["abertura"] * self.abertura[a] * self.abertura[b]
-                         + C["duracao"] * math.log(dur / 120) + C["contexto"][ctx]
-                         + C["repeticao"] * min(anteriores, 5) + (C["discreto"] if discreto else 0.0)
-                         + rng.normal(0, C["ruido"]))
-                    p = sigmoide(z) if midias and not seguem_mutuo else 0.
-                    causou = (not seguem_mutuo) and rng.random() < p
-                    if causou:
-                        self._interacoes_de_conexao(a, b, fim, eid)
+                    if self.lastfm:  # o rótulo é a amizade real: nada de processo de conexão nem interações
+                        midias, p, causou = [], 0., False
+                    else:
+                        discreto = "discreto" in (self.modo_em(a, inicio), self.modo_em(b, inicio))
+                        scores = afinidades(antes(self.uid[a], inicio), antes(self.uid[b], inicio), politica)
+                        midias = motivos_do_sinal(scores, politica)
+                        z = (C["intercepto"] + C["compat"] * bool(midias)
+                             + C["abertura"] * self.abertura[a] * self.abertura[b]
+                             + C["duracao"] * math.log(dur / 120) + C["contexto"][ctx]
+                             + C["repeticao"] * min(anteriores, 5) + (C["discreto"] if discreto else 0.0)
+                             + rng.normal(0, C["ruido"]))
+                        p = sigmoide(z) if midias and not seguem_mutuo else 0.
+                        causou = (not seguem_mutuo) and rng.random() < p
+                        if causou:
+                            self._interacoes_de_conexao(a, b, fim, eid)
                     for u in (a, b):
                         if rng.random() < T["base"] + T["ganho"] * p * self.abertura[u]:
                             ts = fim + timedelta(seconds=float(rng.uniform(5, 600)))
@@ -360,16 +391,21 @@ class Simulador:
                                                 "usuario": token_do_dia(self.uid[u], ts.date()), "ts": ts})
                     self.ocultos.append({
                         "encontro_id": eid, "usuario_publicou": self.uid[pub], "usuario_outro": self.uid[outro],
-                        "amigos": int(amigos), "ja_se_seguiam_mutuamente": int(seguem_mutuo),
+                        "amigos": int(self._amigos_reais_uid(self.uid[a], self.uid[b]) if self.lastfm else amigos),
+                        "ja_se_seguiam_mutuamente": int(seguem_mutuo),
                         "midias_sinalizadas": "|".join(midias),
                         "abertura_publicou": round(float(self.abertura[pub]), 4),
                         "abertura_outro": round(float(self.abertura[outro]), 4),
-                        "p_conexao_latente": round(p, 5), "conexao_causada_pelo_encontro": int(causou),
+                        "p_conexao_latente": float("nan") if self.lastfm else round(p, 5), "conexao_causada_pelo_encontro": int(causou),
                         "fim": fim,
                     })
             if (d + 1) % 14 == 0:
                 print(f"  semana {(d + 1) // 7:>2}: {len(self.encontros):,} encontros até agora")
-        self._interacoes_de_fundo()
+        if not self.lastfm:
+            self._interacoes_de_fundo()
+
+    def _amigos_reais_uid(self, x: str, y: str) -> bool:
+        return (x, y) in self.amigos_reais or (y, x) in self.amigos_reais
 
     # ================================================================ interações no app
     def _alvo(self, origem: int, destino: int, tipo: str, t: datetime) -> tuple[str, str | None]:
@@ -426,7 +462,12 @@ class Simulador:
 
     # ================================================================ label de referência
     def rotular(self) -> pd.DataFrame:
-        """conectou = 1 se houve qualquer interação entre os dois em até 48 h após o fim (seção 4.4)."""
+        """conectou = 1 se houve qualquer interação entre os dois em até 48 h após o fim (seção 4.4).
+        No modo lastfm: conectou = 1 se os dois são amigos no Last.fm (rótulo real, estático)."""
+        if self.lastfm:
+            return pd.DataFrame([{"encontro_id": o["encontro_id"],
+                                  "conectou": int(self._amigos_reais_uid(o["usuario_publicou"], o["usuario_outro"]))}
+                                 for o in self.ocultos])
         por_par: dict[tuple[str, str], list[datetime]] = defaultdict(list)
         for r in self.interacoes:
             por_par[tuple(sorted((r["origem"], r["destino"])))].append(r["criado_em"])
@@ -452,7 +493,8 @@ class Simulador:
         fmt(self.avaliacoes, ["criado_em"]).to_csv(app / "avaliacoes.csv", index=False)
         seg = pd.DataFrame([{"seguidor": self.uid[a], "seguido": self.uid[b], "desde": t} for (a, b), t in self.segue.items()])
         fmt(seg.sort_values("desde"), ["desde"]).to_csv(app / "seguidores.csv", index=False)
-        inter = pd.DataFrame(self.interacoes).sort_values("criado_em").reset_index(drop=True)
+        inter = pd.DataFrame(self.interacoes, columns=["origem", "destino", "tipo", "obra_id", "avaliacao_id",
+                                                       "criado_em", "_causa"]).sort_values("criado_em").reset_index(drop=True)
         inter.insert(0, "interacao_id", [f"i-{i+1:07d}" for i in range(len(inter))])
         causa = inter.pop("_causa")
         fmt(inter, ["criado_em"]).to_csv(app / "interacoes.csv", index=False)
@@ -486,8 +528,9 @@ class Simulador:
             "seguidores": len(seg), "interacoes": len(inter), "encontros": len(enc),
             "toques_interesse": len(self.toques), "trocas_de_modo": len(self.status),
             "taxa_conectou": round(float(df.conectou.mean()), 4),
-            "taxa_conexao_causada": round(float(df.conexao_causada_pelo_encontro.mean()), 4),
         }
+        if not self.lastfm:
+            dados["taxa_conexao_causada"] = round(float(df.conexao_causada_pelo_encontro.mean()), 4)
         (saida / "relatorio_simulacao.json").write_text(json.dumps(dados, indent=2, ensure_ascii=False))
 
         def tabela(col, nome):
@@ -498,31 +541,54 @@ class Simulador:
                 out.append(f"| {k} | {int(r.encontros):,} | {pct(r.conectou)} | {r.dur_mediana_s:.0f} s | {r.rssi_medio:.1f} dBm |")
             return out
 
+        if self.lastfm:
+            n_pos = int(df.conectou.sum())
+            pos = df[df.conectou == 1]
+            pares_pos = len({tuple(sorted(x)) for x in zip(pos.usuario_publicou, pos.usuario_outro)})
+            aviso = ("> Os **encontros** são simulados (local, hora, duração e RSSI são premissas da equipe); usuários, "
+                     "gostos e o **rótulo** (amizade no Last.fm) são reais. Os encontros não olham a amizade; "
+                     "o desempenho medido é sobre essa combinação, não sobre o comportamento real em campo.")
+            rotulo = [
+                f"- Encontros com label positivo (os dois já são amigos no Last.fm): **{pct(dados['taxa_conectou'])}** "
+                f"({n_pos:,} encontros, {pares_pos:,} pares) — problema desbalanceado, como a rede de amizades da população",
+                "- O rótulo é estático: não depende da data do encontro nem de nenhuma janela; "
+                "a divisão treino/validação/teste é feita por par de usuários (D-014).", "",
+            ]
+            titulo_semana = "## Por semana"
+            nota_semana = "Picos nas semanas 3, 7 e 11 = fins de semana com convenção de games."
+        else:
+            aviso = ("> Dados **sintéticos**. Qualquer desempenho medido com eles é desempenho sobre a simulação, "
+                     "não sobre o comportamento real dos usuários.")
+            rotulo = [
+                f"- Encontros com label positivo: **{pct(dados['taxa_conectou'])}** (problema desbalanceado, como esperado)",
+                f"- Encontros que de fato *causaram* conexão (variável oculta): {pct(dados['taxa_conexao_causada'])}",
+                f"- Conexões causadas cuja 1ª interação veio depois de 48 h (label = 0 mesmo assim): "
+                f"{pct(1 - causadas_fora.conectou.mean()) if len(causadas_fora) else '—'}",
+                f"- Positivos entre amigos (que já se seguem): {pct(df[df.amigos == 1].conectou.mean())} · "
+                f"entre desconhecidos: {pct(df[df.amigos == 0].conectou.mean())}", "",
+                "A diferença entre *conectou* e *causou* é intencional: amigos interagem no app de qualquer jeito, e "
+                "algumas conexões só acontecem depois da janela. O modelo precisa lidar com esse ruído.", "",
+            ]
+            titulo_semana = "## Por semana (para o split temporal 1–8 / 9–10 / 11–12)"
+            nota_semana = "Picos nas semanas 3, 7 e 11 = fins de semana com convenção de games."
+
         L = [
             "# Relatório da simulação — bootstrap dataset OpiniOn (CC1)", "",
             f"Semente {self.cfg['simulacao']['semente']} · {self.n} usuários · {self.dias // 7} semanas "
             f"({self.inicio:%d/%m/%Y} a {(self.fim - timedelta(days=1)):%d/%m/%Y}) · todos os parâmetros são premissas "
             "da equipe (`config/simulacao.yaml`).", "",
-            "> Dados **sintéticos**. Qualquer desempenho medido com eles é desempenho sobre a simulação, "
-            "não sobre o comportamento real dos usuários.", "",
+            aviso, "",
             "## Volume", "",
             "| Item | Quantidade |", "|---|---|",
             *[f"| {k} | {v:,} |" for k, v in dados.items() if isinstance(v, int)], "",
-            "## Label `conectou` (interação em até 48 h)", "",
-            f"- Encontros com label positivo: **{pct(dados['taxa_conectou'])}** (problema desbalanceado, como esperado)",
-            f"- Encontros que de fato *causaram* conexão (variável oculta): {pct(dados['taxa_conexao_causada'])}",
-            f"- Conexões causadas cuja 1ª interação veio depois de 48 h (label = 0 mesmo assim): "
-            f"{pct(1 - causadas_fora.conectou.mean()) if len(causadas_fora) else '—'}",
-            f"- Positivos entre amigos (que já se seguem): {pct(df[df.amigos == 1].conectou.mean())} · "
-            f"entre desconhecidos: {pct(df[df.amigos == 0].conectou.mean())}", "",
-            "A diferença entre *conectou* e *causou* é intencional: amigos interagem no app de qualquer jeito, e "
-            "algumas conexões só acontecem depois da janela. O modelo precisa lidar com esse ruído.", "",
+            "## Label `conectou` " + ("(amizade real no Last.fm)" if self.lastfm else "(interação em até 48 h)"), "",
+            *rotulo,
             "## Por contexto", "", *tabela("local", "Local"), "",
-            "## Por semana (para o split temporal 1–8 / 9–10 / 11–12)", "",
+            titulo_semana, "",
             "| Semana | Encontros | % conectou |", "|---|---|---|",
             *[f"| {s} | {int(n):,} | {pct(c)} |" for s, (n, c) in
               df.groupby("semana").agg(n=("encontro_id", "size"), c=("conectou", "mean")).iterrows()], "",
-            "Picos nas semanas 3, 7 e 11 = fins de semana com convenção de games.", "",
+            nota_semana, "",
             "## Por persona de quem publicou", "", *tabela("persona_publicou", "Persona"), "",
         ]
         (saida / "relatorio_simulacao.md").write_text("\n".join(L) + "\n", encoding="utf-8")
