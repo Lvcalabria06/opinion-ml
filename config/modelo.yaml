@@ -78,3 +78,54 @@ comparacao:
         learning_rate: [0.05, 0.1]
         max_leaf_nodes: [15, 31]
         min_samples_leaf: [50]
+
+# =====================================================================
+# CC5 — otimização de hiperparâmetros com Optuna (python -m opinion.modelo.otimizar)
+# ---------------------------------------------------------------------
+# Busca bayesiana (TPE) por família, sempre no treino com objetivo medido na validação
+# (a métrica de `metrica`/`publico`). O melhor de cada família é reajustado e o teste é
+# medido uma única vez, só para relatar. O vencedor também sai da validação.
+# `regulariza: menor|maior` diz em que direção o parâmetro regulariza mais (modelo mais simples):
+# usado só para interpretar um melhor ponto na borda do espaço.
+# Tipos de espaço: float_log, int, int_log (min/max inclusivos) e categorico (valores).
+# =====================================================================
+otimizacao:
+  experimento: opinion-cc5-lastfm
+  modelo_registrado: opinion-cc5-lastfm
+  alias: melhor
+  semente: 42
+  familias:
+    regressao_logistica:
+      tipo: logreg
+      tentativas: 50
+      espaco:
+        C: {tipo: float_log, min: 0.00001, max: 100, regulariza: menor}
+        class_weight: {tipo: categorico, valores: [null, balanced]}
+    random_forest:
+      tipo: random_forest
+      tentativas: 30
+      espaco:
+        n_estimators: {tipo: int, min: 100, max: 400}
+        max_depth: {tipo: int, min: 2, max: 24, regulariza: menor}
+        min_samples_leaf: {tipo: int_log, min: 5, max: 200, regulariza: maior}
+        max_features: {tipo: categorico, valores: [sqrt, log2, 0.5]}
+        class_weight: {tipo: categorico, valores: [null, balanced, balanced_subsample]}
+
+# =====================================================================
+# CC6 — validação cruzada, estabilidade e curvas (python -m opinion.modelo.validar)
+# ---------------------------------------------------------------------
+# StratifiedGroupKFold: estratificada pelo rótulo `conectou` (positivos raros) e agrupada por `par_id`
+# (os encontros de um mesmo par nunca ficam em dois folds). Usa só treino + validação; o teste fica fora.
+# Os hiperparâmetros das duas famílias vêm de data/processed/otimizacao.json (CC5). A regra simples
+# (compat_score) entra como referência, sem ajuste. As curvas usam `sementes_curvas` (menos que `sementes`
+# para limitar o tempo): fração do treino de cada fold (por par) e um hiperparâmetro de complexidade.
+# =====================================================================
+validacao_cruzada:
+  experimento: opinion-cc6-lastfm
+  k: 5
+  sementes: [0, 1, 2]
+  sementes_curvas: [0]
+  fracoes_aprendizado: [0.1, 0.25, 0.5, 0.75, 1.0]
+  complexidade:
+    regressao_logistica: {parametro: C, valores: [0.00002, 0.0001, 0.001, 0.01, 0.1, 1, 10, 100]}
+    random_forest: {parametro: max_depth, valores: [2, 3, 4, 8, 12, 16, 24]}

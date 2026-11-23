@@ -5,6 +5,20 @@ fica em cima. Decisões ainda abertas ficam em [`status.md`](status.md).
 
 ---
 
+## D-015 · 23/11/2026 · CC5 (Optuna) e CC6 (validação cruzada) no experimento Last.fm
+
+- **CC5:** Optuna (TPE, semente 42) otimiza regressão logística (50 tentativas) e Random Forest (30),
+  objetivo PR-AUC na validação; limiar F0,5 na validação; teste medido uma vez. Espaços em
+  `config/modelo.yaml → otimizacao`. Resultado: o melhor ponto fica na borda de regularização máxima
+  (LR `C≈2e-5`; RF profundidade 3) e o ganho sobre a grade do CC4 na validação não se transferiu ao
+  teste (LR 0,061; RF 0,053; regra 0,027; prevalência 0,0075). O espaço não foi ampliado mais por isso.
+- **CC6:** `StratifiedGroupKFold` (k = 5, grupos = `par_id`, 3 sementes) só sobre treino + validação.
+  LR 0,061 ± 0,008 e RF 0,058 ± 0,007 de PR-AUC são indistinguíveis; RF tem gap treino−validação maior
+  (+0,018 contra −0,002); regra 0,027 ± 0,003. Leave-One-Out não aplicado (~138 mil treinos e vazamento
+  entre encontros do mesmo par). Curvas de aprendizado e complexidade com 1 semente.
+- **Consequência:** com desempenho igual, a regressão logística é o modelo recomendado (mais simples,
+  explicável e sem sobreajuste); o vencedor formal do CC5 (RF) fica registrado em `opinion-cc5-lastfm`.
+
 ## D-014 · 22/11/2026 · Experimento Last.fm: prever amizade (branch `experimento-lastfm`)
 
 - **Decisão:** trocar, só nesta branch, a fonte por HetRec 2011 Last.fm e a pergunta por "dois usuários

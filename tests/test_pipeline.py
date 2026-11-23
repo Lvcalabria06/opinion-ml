@@ -9,6 +9,8 @@ resultado mudar, alguma feature estava "olhando para o futuro".
 """
 from __future__ import annotations
 
+import copy
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -58,7 +60,8 @@ def test_sem_vazamento_do_futuro(fontes, cfg):
 
 
 def test_label_bate_com_referencia(fontes, cfg):
-    r, _ = label.calcular(fontes["encontros"], fontes["interacoes"], cfg)
+    # no modo amizade o rótulo vem dos seguidores (amizades); no modo 48 h, das interações
+    r, _ = label.calcular(fontes["encontros"], fontes["interacoes"], cfg, fontes["seguidores"])
     ref = pd.read_csv(PASTA_BOOTSTRAP / "rotulos_referencia.csv")
     m = r.merge(ref, on="encontro_id", suffixes=("", "_ref"))
     assert len(m) == len(ref)
@@ -75,7 +78,9 @@ def test_label_janela_48h(cfg):
                           "tipo": ["seguir", "curtir_review", "abrir_perfil", "seguir"],
                           "criado_em": [fim + pd.Timedelta(hours=47), fim + pd.Timedelta(hours=49),
                                         fim - pd.Timedelta(minutes=1), fim + pd.Timedelta(days=10)]})
-    r, _ = label.calcular(enc, inter, cfg)
+    c = copy.deepcopy(cfg)                     # cópia: o fixture é compartilhado pelo módulo
+    c["label"]["tipo"] = "interacao_48h"       # esta regra continua disponível por configuração
+    r, _ = label.calcular(enc, inter, c)
     assert r.set_index("encontro_id").conectou.to_dict() == {"x": 1, "y": 0, "z": 0}
 
 

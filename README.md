@@ -178,6 +178,8 @@ python -m opinion.fontes.lastfm            # gera data/reais/lastfm/
 python -m opinion.gerar_bootstrap
 python -m opinion.pipeline.executar --fonte arquivos
 python -m opinion.modelo.treinar && python -m opinion.checkpoint2 && python -m opinion.modelo.comparar
+python -m opinion.modelo.otimizar     # CC5: Optuna (~3 min) -> docs/otimizacao.md
+python -m opinion.modelo.validar      # CC6: validação cruzada (~12 min) -> docs/validacao_cruzada.md
 ```
 
 Licença não comercial; fonte e limitações em [`docs/fontes_dados.md`](docs/fontes_dados.md).

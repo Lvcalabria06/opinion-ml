@@ -24,7 +24,11 @@ Checkpoint 2 OK. MLflow: `opinion-cc3-lastfm`, `opinion-baseline-cc3-lastfm`, `o
 `opinion-cc4-lastfm@melhor`. Validação da simulação: 13 OK (modo amizade; cenários de sensibilidade não
 se aplicam). Notebook reexecutado, 12 figuras.
 
-Pendências do experimento: CC5 e CC6; teste de MQTT e Docker de ponta a ponta (Docker desligado, não
+**CC5 e CC6 (23/11/2026, [D-015](decisoes.md)):** Optuna na LR e na RF ([`otimizacao.md`](otimizacao.md));
+CV estratificada agrupada por par, 5 × 3 ([`validacao_cruzada.md`](validacao_cruzada.md)). LR 0,061 ± 0,008 e
+RF 0,058 ± 0,007 empatam; a LR é a recomendada (mais simples, sem sobreajuste).
+
+Pendências do experimento: teste de MQTT e Docker de ponta a ponta (Docker desligado, não
 verificado); validação do professor para o novo problema. Limitações: sem datas de amizade (sem split
 temporal, possível causalidade reversa), encontros sem sinal real do label, ~1,9 mil usuários, licença não comercial.
 
