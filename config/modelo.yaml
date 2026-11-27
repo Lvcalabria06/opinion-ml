@@ -73,3 +73,104 @@ comparacao:
         learning_rate: [0.05, 0.1]
         max_leaf_nodes: [15, 31]
         min_samples_leaf: [50]
+    # Três famílias da lista da especificação do CC4 (KNN, Árvore, Random Forest, AdaBoost, MLP)
+    # além de Árvore e Random Forest. KNN e MLP padronizam as features dentro do pipeline.
+    knn:
+      tipo: knn
+      grade:
+        n_neighbors: [51, 151]
+        weights: [uniform, distance]
+    adaboost:
+      tipo: adaboost
+      grade:
+        n_estimators: [200]
+        learning_rate: [0.1, 0.5]
+        max_depth: [1, 2]               # profundidade da árvore-base (1 = stump)
+    mlp:
+      tipo: mlp
+      grade:
+        hidden_layer_sizes: [[32], [64, 32]]
+        alpha: [0.001, 0.01]
+
+# =====================================================================
+# CC5 — otimização de hiperparâmetros (python -m opinion.modelo.otimizar)
+# ---------------------------------------------------------------------
+# Otimização bayesiana (Optuna, amostrador TPE) sobre o modelo selecionado no CC4,
+# comparada com uma busca aleatória do mesmo orçamento e com a grade fixa do CC4.
+# Objetivo: PR-AUC entre desconhecidos na VALIDAÇÃO temporal (o teste continua
+# medido uma vez, no fim). Depois da busca, as probabilidades são calibradas
+# (sigmoide, ajustada na validação; não altera a ordenação) para que a API e o
+# dashboard possam mostrar a chance como probabilidade.
+# =====================================================================
+otimizacao:
+  experimento: opinion-cc5-otimizacao
+  modelo_registrado: opinion-cc5-otimizado
+  alias: otimizado
+  familia: auto              # auto = vencedor do CC4 no MLflow (alias @melhor); ou o nome de uma família
+  trials: 30                 # por amostrador; a 1ª tentativa é a melhor configuração da grade do CC4
+  semente: 42
+  amostradores: [tpe, aleatorio]
+  calibracao: sigmoid        # sigmoid | isotonic | nenhuma
+  espacos:                   # [mín, máx] (log: true = escala logarítmica) ou lista de opções
+    logreg:
+      C: {min: 0.001, max: 100.0, log: true}
+      class_weight: [null, balanced]
+    arvore:
+      max_depth: {min: 3, max: 14, inteiro: true}
+      min_samples_leaf: {min: 5, max: 400, inteiro: true, log: true}
+      criterion: [gini, entropy]
+    random_forest:
+      n_estimators: {min: 100, max: 500, inteiro: true}
+      max_depth: {min: 4, max: 20, inteiro: true}
+      min_samples_leaf: {min: 5, max: 200, inteiro: true, log: true}
+      max_features: [sqrt, 0.3, 0.5]
+    hist_gb:
+      learning_rate: {min: 0.01, max: 0.3, log: true}
+      max_leaf_nodes: {min: 7, max: 63, inteiro: true}
+      min_samples_leaf: {min: 20, max: 400, inteiro: true, log: true}
+      l2_regularization: {min: 0.000001, max: 10.0, log: true}
+    knn:
+      n_neighbors: {min: 15, max: 401, inteiro: true, log: true}
+      weights: [uniform, distance]
+    adaboost:
+      n_estimators: {min: 50, max: 300, inteiro: true}
+      learning_rate: {min: 0.01, max: 1.0, log: true}
+      max_depth: {min: 1, max: 4, inteiro: true}
+    mlp:
+      hidden_layer_sizes: [[16], [32], [64], [32, 16], [64, 32]]
+      alpha: {min: 0.00001, max: 0.1, log: true}
+      learning_rate_init: {min: 0.0003, max: 0.01, log: true}
+
+# =====================================================================
+# CC6 — validação cruzada e estabilidade (python -m opinion.modelo.validacao_cruzada)
+# ---------------------------------------------------------------------
+# Stratified k-fold AGRUPADO por par (par_id) sobre treino + validação (semanas 1–10):
+# o mesmo par nunca fica dos dois lados. O teste (11–12) não é usado. Complemento
+# temporal: janela expansível semana a semana, com purga de 48 h, para medir a
+# generalização para o futuro.
+# =====================================================================
+validacao_cruzada:
+  experimento: opinion-cc6-validacao-cruzada
+  k: 5
+  semente: 0
+  curva_aprendizado: [0.1, 0.25, 0.5, 0.75, 1.0]
+  temporal_primeira_semana_validacao: 5     # treina 1..k-1, valida k, para k = 5..10
+
+# =====================================================================
+# Produção (CC7/CC8): modelo servido pela API e retreinado pelo Airflow
+# ---------------------------------------------------------------------
+# A task `treino` da DAG reajusta a configuração otimizada no CC5 com os dados
+# mais recentes, recalibra, e só promove a nova versão se ela superar a regra
+# simples na validação.
+# =====================================================================
+producao:
+  modelo_registrado: opinion-producao
+  alias: producao
+  origem: opinion-cc5-otimizado@otimizado   # de onde vêm família e hiperparâmetros
+  # Usada quando o MLflow ainda não tem o CC5 (ex.: primeiro `docker compose up`): é a configuração
+  # que o CC5 escolheu em 27/11/2026 (docs/otimizacao.md), copiada aqui para o retreino no Airflow.
+  reserva:
+    familia: adaboost
+    tipo: adaboost
+    params: {n_estimators: 292, learning_rate: 0.93842, max_depth: 1}
+  faixa_perceptivel_fator: 1.5              # p >= limiar → periferico_leve; p >= 1,5 × limiar → periferico_perceptivel

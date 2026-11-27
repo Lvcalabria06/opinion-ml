@@ -37,7 +37,8 @@ DOC = RAIZ / "docs" / "comparacao_modelos.md"
 FIGURAS = RAIZ / "docs" / "img" / "cc4"
 VERDADE = PASTA_BOOTSTRAP / "verdade_simulacao_NAO_USAR_COMO_FEATURE" / "encontros_ocultos.csv"
 NOMES = {"regressao_logistica": "Regressão logística", "arvore_decisao": "Árvore de decisão",
-         "random_forest": "Random Forest", "gradient_boosting": "Gradient Boosting", "regra": "Regra simples"}
+         "random_forest": "Random Forest", "gradient_boosting": "Gradient Boosting", "knn": "KNN",
+         "adaboost": "AdaBoost", "mlp": "MLP (rede neural)", "regra": "Regra simples"}
 
 
 def _nome(k: str) -> str:
@@ -442,7 +443,8 @@ def analise(r: dict) -> list[str]:
     bons = [k for k in fam if fam[k]["teste"]["brier"] <= b0]
     out.append(f"**Calibração:** prever sempre a prevalência dá Brier {_f(b0)}. "
                + (f"{_lista([_nome(k) for k in ruins])} {'fica' if len(ruins) == 1 else 'ficam'} pior que isso "
-                  "(probabilidades infladas, efeito de `class_weight=balanced`); " if ruins else "")
+                  "(probabilidades descalibradas: `class_weight=balanced` infla as da regressão logística e o "
+                  "AdaBoost concentra as suas perto de 0,5); " if ruins else "")
                + (f"{_lista([_nome(k) for k in bons])} {'fica' if len(bons) == 1 else 'ficam'} melhor. "
                   if bons else "")
                + "A ordenação e o limiar não dependem disso, mas a probabilidade só pode ser mostrada como chance "

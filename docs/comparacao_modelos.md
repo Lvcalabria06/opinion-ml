@@ -1,30 +1,29 @@
 # Comparação de modelos — OpiniOn (CC4)
 
-**Experimento histórico.** Este relatório foi gerado antes da regeneração do bootstrap com a
-regra de aviso por categoria. Seus números e figuras não descrevem os dados atuais.
-Consulte [os resultados por mídia](match_por_midia.md) para a versão em uso.
-
-Gerado por `python -m opinion.modelo.comparar` em 18/11/2026 23:19. Números do teste medidos **uma vez** por modelo; nada foi escolhido com eles.
+Gerado por `python -m opinion.modelo.comparar` em 27/11/2026 19:41. Números do teste medidos **uma vez** por modelo; nada foi escolhido com eles.
 
 > Usuários, obras e notas são reais (Amazon Reviews 2023); encontros e o label `conectou` são simulados ([`fontes_dados.md`](fontes_dados.md)). As métricas medem quão bem cada modelo recupera o processo da simulação, não o comportamento de usuários reais da pulseira.
 
 ## 1. Protocolo
 
-- **Mesmos dados e split do CC3:** treino semanas 1–8 (44.254 encontros), validação 9–10, teste 11–12; purga na fronteira treino/validação.
+- **Mesmos dados e split do CC3:** treino semanas 1–8 (46.244 encontros), validação 9–10, teste 11–12; purga na fronteira treino/validação.
 - **Cada família** tem uma grade pequena e fixa (`config/modelo.yaml → comparacao`). A configuração e o limiar do sinal (F0,5 entre desconhecidos) são escolhidos na validação. Otimização de hiperparâmetros fica para o CC5 (Optuna) e validação cruzada para o CC6.
 - **Escolha do melhor modelo:** pr_auc_desconhecidos na validação. A regra simples (`compat_score`) recebe o mesmo protocolo, com limiar próprio.
-- **Incerteza:** intervalo de confiança de 95% por bootstrap pareado (5 pontuações, mesmas reamostras para todas) no teste, entre desconhecidos.
+- **Incerteza:** intervalo de confiança de 95% por bootstrap pareado (8 pontuações, mesmas reamostras para todas) no teste, entre desconhecidos.
 
 ## 2. Resultado
 
 | Modelo | PR-AUC desc. (valid.) | PR-AUC desc. (teste, IC 95%) | PR-AUC geral (teste) | ROC-AUC desc. (teste) | Brier (teste) |
 |---|---|---|---|---|---|
-| Gradient Boosting **(escolhido)** | 0,135 | 0,143 (0,126–0,162) | 0,247 | 0,672 | 0,103 |
-| Random Forest | 0,134 | 0,147 (0,130–0,167) | 0,250 | 0,675 | 0,103 |
-| Regressão logística | 0,134 | 0,152 (0,135–0,173) | 0,243 | 0,681 | 0,205 |
-| Árvore de decisão | 0,105 | 0,120 (0,107–0,135) | 0,231 | 0,624 | 0,107 |
-| Regra simples | 0,092 | 0,104 (0,093–0,118) | 0,149 | 0,586 | não se aplica |
-| *acaso* | | *0,077* | *0,128* | *0,500* | *0,112* (constante) |
+| AdaBoost **(escolhido)** | 0,136 | 0,186 (0,148–0,246) | 0,269 | 0,955 | 0,088 |
+| Gradient Boosting | 0,130 | 0,176 (0,139–0,228) | 0,274 | 0,953 | 0,061 |
+| Random Forest | 0,128 | 0,184 (0,145–0,239) | 0,265 | 0,949 | 0,060 |
+| Árvore de decisão | 0,116 | 0,156 (0,125–0,195) | 0,255 | 0,954 | 0,066 |
+| MLP (rede neural) | 0,107 | 0,139 (0,106–0,189) | 0,264 | 0,928 | 0,062 |
+| Regressão logística | 0,101 | 0,159 (0,120–0,223) | 0,266 | 0,927 | 0,147 |
+| KNN | 0,060 | 0,101 (0,073–0,153) | 0,265 | 0,876 | 0,061 |
+| Regra simples | 0,100 | 0,131 (0,104–0,177) | 0,103 | 0,937 | não se aplica |
+| *acaso* | | *0,014* | *0,080* | *0,500* | *0,073* (constante) |
 
 ![PR-AUC com IC](img/cc4/pr_auc_ic.png)
 
@@ -34,16 +33,18 @@ Gerado por `python -m opinion.modelo.comparar` em 18/11/2026 23:19. Números do 
 
 ## 3. No ponto de operação (desconhecidos, teste)
 
-Esta seção avalia uma política de sinal da rodada histórica. O protótipo atual avisa por
-categoria na proximidade, conforme o corte fixado em `config/pipeline.yaml`.
+O limiar do modelo é uma avaliação acadêmica. O aviso do protótipo usa o corte por categoria na proximidade.
 
 | Modelo | Limiar | Precisão | Recall | F0,5 | Sinal em | VP | FP | FN | VN |
 |---|---|---|---|---|---|---|---|---|---|
-| Gradient Boosting | 0,131 | 18,2% | 17,8% | 0,181 | 7,6% | 119 | 536 | 549 | 7.435 |
-| Random Forest | 0,128 | 18,8% | 17,1% | 0,185 | 7,0% | 114 | 491 | 554 | 7.480 |
-| Regressão logística | 0,447 | 17,8% | 25,7% | 0,189 | 11,2% | 172 | 797 | 496 | 7.174 |
-| Árvore de decisão | 0,160 | 14,6% | 13,2% | 0,143 | 7,0% | 88 | 516 | 580 | 7.455 |
-| Regra simples | 0,666 | 12,4% | 22,6% | 0,137 | 14,1% | 151 | 1.063 | 517 | 6.908 |
+| AdaBoost | 0,313 | 24,1% | 11,4% | 0,197 | 0,7% | 14 | 44 | 109 | 8.666 |
+| Gradient Boosting | 0,123 | 18,6% | 48,0% | 0,211 | 3,6% | 59 | 259 | 64 | 8.451 |
+| Random Forest | 0,134 | 21,8% | 30,9% | 0,232 | 2,0% | 38 | 136 | 85 | 8.574 |
+| Árvore de decisão | 0,163 | 13,1% | 13,0% | 0,131 | 1,4% | 16 | 106 | 107 | 8.604 |
+| MLP (rede neural) | 0,054 | 12,7% | 51,2% | 0,150 | 5,6% | 63 | 433 | 60 | 8.277 |
+| Regressão logística | 0,416 | 19,7% | 12,2% | 0,176 | 0,9% | 15 | 61 | 108 | 8.649 |
+| KNN | 0,061 | 11,4% | 17,9% | 0,123 | 2,2% | 22 | 171 | 101 | 8.539 |
+| Regra simples | 0,773 | 18,8% | 9,8% | 0,158 | 0,7% | 12 | 52 | 111 | 8.658 |
 
 ![Matrizes de confusão](img/cc4/matrizes_confusao.png)
 
@@ -51,19 +52,22 @@ categoria na proximidade, conforme o corte fixado em `config/pipeline.yaml`.
 
 | Modelo | vs Regressão logística (IC 95%) | vs regra simples (IC 95%) |
 |---|---|---|
-| Gradient Boosting | -0,010 (-0,019 a +0,001) | +0,038 (+0,025 a +0,054) |
-| Random Forest | -0,005 (-0,016 a +0,006) | +0,043 (+0,030 a +0,059) |
-| Regressão logística | — | +0,048 (+0,034 a +0,063) |
-| Árvore de decisão | -0,033 (-0,048 a -0,018) | +0,015 (+0,003 a +0,029) |
+| AdaBoost | +0,027 (-0,024 a +0,074) | +0,055 (+0,015 a +0,099) |
+| Gradient Boosting | +0,017 (-0,040 a +0,065) | +0,045 (+0,003 a +0,092) |
+| Random Forest | +0,025 (-0,029 a +0,077) | +0,053 (+0,010 a +0,101) |
+| Árvore de decisão | -0,003 (-0,060 a +0,038) | +0,025 (-0,014 a +0,058) |
+| MLP (rede neural) | -0,020 (-0,068 a +0,019) | +0,008 (-0,023 a +0,040) |
+| Regressão logística | — | +0,028 (+0,003 a +0,061) |
+| KNN | -0,058 (-0,090 a -0,027) | -0,030 (-0,056 a +0,005) |
 
 ## 5. Precisão do sinal por contexto (desconhecidos, teste)
 
-| Local | Encontros | Taxa real | Gradient Boosting | Random Forest | Regressão logística | Árvore de decisão | Regra simples |
-|---|---|---|---|---|---|---|---|
-| campus | 1.675 | 3,2% | 0,0% (0,3%) | 25,0% (0,2%) | 7,7% (1,6%) | 4,0% (3,0%) | 6,4% (12,1%) |
-| cinema | 1.564 | 10,4% | 17,9% (10,4%) | 17,5% (10,9%) | 16,4% (18,3%) | 14,5% (11,0%) | 14,2% (14,8%) |
-| convencao_games | 2.044 | 11,6% | 20,2% (17,7%) | 19,3% (17,3%) | 18,7% (25,9%) | 21,0% (8,6%) | 18,5% (12,7%) |
-| livraria | 3.356 | 6,3% | 13,5% (3,8%) | 19,5% (2,3%) | 18,8% (3,8%) | 11,7% (6,1%) | 11,0% (15,5%) |
+| Local | Encontros | Taxa real | AdaBoost | Gradient Boosting | Random Forest | Árvore de decisão | MLP (rede neural) | Regressão logística | KNN | Regra simples |
+|---|---|---|---|---|---|---|---|---|---|---|
+| campus | 1.716 | 0,8% | 40,0% (0,3%) | 14,3% (0,4%) | 0,0% (0,0%) | 0,0% (0,1%) | 10,8% (2,2%) | 25,0% (0,7%) | 13,0% (1,3%) | 27,3% (0,6%) |
+| cinema | 1.561 | 1,6% | 33,3% (1,0%) | 19,3% (5,6%) | 25,4% (4,3%) | 11,1% (2,3%) | 13,6% (7,0%) | 16,7% (0,8%) | 10,7% (3,6%) | 16,7% (0,8%) |
+| convencao_games | 1.909 | 2,3% | 21,9% (1,7%) | 23,2% (7,2%) | 20,9% (4,8%) | 17,9% (2,9%) | 16,5% (8,9%) | 25,8% (1,6%) | 17,5% (3,0%) | 22,7% (1,2%) |
+| livraria | 3.647 | 1,2% | 0,0% (0,2%) | 10,6% (2,3%) | 12,5% (0,4%) | 6,9% (0,8%) | 8,9% (4,9%) | 9,5% (0,6%) | 5,3% (1,6%) | 10,5% (0,5%) |
 
 Cada célula: precisão (fração de encontros com sinal).
 
@@ -73,10 +77,13 @@ Queda de PR-AUC entre desconhecidos quando a feature é embaralhada. Top 5 de ca
 
 | Modelo | 1º | 2º | 3º | 4º | 5º |
 |---|---|---|---|---|---|
-| Gradient Boosting | `log_duracao` (+0,031) | `compat_score` (+0,015) | `historico_comum_filme` (+0,007) | `compat_score_livro` (+0,007) | `algum_modo_discreto` (+0,006) |
-| Random Forest | `log_duracao` (+0,027) | `local_cinema` (+0,006) | `compat_score_livro` (+0,003) | `local_livraria` (+0,003) | `historico_comum_filme` (+0,003) |
-| Regressão logística | `compat_score_livro` (+0,054) | `match_musica` (+0,042) | `compat_score_musica` (+0,038) | `compat_score_filme` (+0,034) | `compat_score_jogo` (+0,027) |
-| Árvore de decisão | `compat_score` (+0,020) | `log_duracao` (+0,016) | `compat_score_livro` (+0,006) | `local_cinema` (+0,005) | `sim_generos` (+0,005) |
+| AdaBoost | `compat_score` (+0,119) | `log_duracao` (+0,039) | `compat_score_filme` (+0,015) | `compat_score_jogo` (+0,007) | `compat_score_musica` (+0,007) |
+| Gradient Boosting | `compat_score` (+0,118) | `historico_min` (+0,014) | `compat_score_livro` (+0,004) | `conexoes_min` (+0,004) | `sim_generos` (+0,003) |
+| Random Forest | `compat_score` (+0,043) | `sim_generos` (+0,021) | `compat_score_filme` (+0,008) | `local_livraria` (+0,004) | `hora` (+0,003) |
+| Árvore de decisão | `compat_score` (+0,106) | `log_duracao` (+0,017) | `hora` (+0,007) | `conexoes_min` (+0,006) | `local_campus` (+0,002) |
+| MLP (rede neural) | `sim_generos` (+0,094) | `match_filme` (+0,013) | `historico_max` (+0,010) | `compat_score` (+0,010) | `local_campus` (+0,010) |
+| Regressão logística | `compat_score_livro` (+0,086) | `compat_score_musica` (+0,065) | `sim_generos` (+0,064) | `match_serie` (+0,045) | `compat_score_serie` (+0,044) |
+| KNN | `sim_generos` (+0,019) | `compat_score_jogo` (+0,012) | `match_jogo` (+0,011) | `compat_score_livro` (+0,006) | `sim_notas` (+0,005) |
 
 ![Importância](img/cc4/importancia.png)
 
@@ -84,22 +91,25 @@ Queda de PR-AUC entre desconhecidos quando a feature é embaralhada. Top 5 de ca
 
 | Modelo | Configurações testadas | Treino por configuração | Pontuação por encontro |
 |---|---|---|---|
-| Gradient Boosting | 4 | 0,5 s | 0,002 ms |
-| Random Forest | 4 | 1,0 s | 0,005 ms |
-| Regressão logística | 6 | 0,1 s | 0,001 ms |
-| Árvore de decisão | 6 | 0,1 s | 0,001 ms |
+| AdaBoost | 4 | 14,0 s | 0,018 ms |
+| Gradient Boosting | 4 | 0,7 s | 0,004 ms |
+| Random Forest | 4 | 5,0 s | 0,014 ms |
+| Árvore de decisão | 6 | 0,2 s | 0,002 ms |
+| MLP (rede neural) | 4 | 3,3 s | 0,004 ms |
+| Regressão logística | 6 | 0,3 s | 0,002 ms |
+| KNN | 4 | 1,4 s | 0,150 ms |
 
 ## 8. Análise crítica
 
-- **Escolhido na validação: Gradient Boosting** (0,135). No teste a ordem muda (1º no teste: Regressão logística): as diferenças entre eles são pequenas o bastante para mudar de posição com outra amostra.
-- **Contra o baseline (Regressão logística):** -0,010 de PR-AUC (IC 95% -0,019 a +0,001). O intervalo inclui zero: **não dá para afirmar que o modelo mais complexo é melhor que o baseline** com estes dados.
-- **Contra a regra simples:** +0,038 de PR-AUC (IC 95% +0,025 a +0,054) — o modelo supera a regra de forma consistente.
-- **No ponto de operação**, Gradient Boosting acerta 18,2% dos sinais (recall 17,8%, sinal em 7,6% dos encontros); a regra, 12,4% (recall 22,6%, sinal em 14,1%). A vantagem aparece também na precisão do sinal, que é o que o usuário sente.
-- **Calibração:** prever sempre a prevalência dá Brier 0,112. Regressão logística fica pior que isso (probabilidades infladas, efeito de `class_weight=balanced`); Árvore de decisão, Random Forest e Gradient Boosting ficam melhor. A ordenação e o limiar não dependem disso, mas a probabilidade só pode ser mostrada como chance real (dashboard, faixas de sinal) depois de calibrada.
+- **Escolhido na validação: AdaBoost** (0,136). No teste a ordem muda (1º no teste: AdaBoost): as diferenças entre eles são pequenas o bastante para mudar de posição com outra amostra.
+- **Contra o baseline (Regressão logística):** +0,027 de PR-AUC (IC 95% -0,024 a +0,074). O intervalo inclui zero: **não dá para afirmar que o modelo mais complexo é melhor que o baseline** com estes dados.
+- **Contra a regra simples:** +0,055 de PR-AUC (IC 95% +0,015 a +0,099) — o modelo supera a regra de forma consistente.
+- **No ponto de operação**, AdaBoost acerta 24,1% dos sinais (recall 11,4%, sinal em 0,7% dos encontros); a regra, 18,8% (recall 9,8%, sinal em 0,7%). A vantagem aparece também na precisão do sinal, que é o que o usuário sente.
+- **Calibração:** prever sempre a prevalência dá Brier 0,073. Regressão logística e AdaBoost ficam pior que isso (probabilidades descalibradas: `class_weight=balanced` infla as da regressão logística e o AdaBoost concentra as suas perto de 0,5); Árvore de decisão, Random Forest, Gradient Boosting, KNN e MLP (rede neural) ficam melhor. A ordenação e o limiar não dependem disso, mas a probabilidade só pode ser mostrada como chance real (dashboard, faixas de sinal) depois de calibrada.
 - **O que os modelos aprendem:** as 3 features mais importantes variam entre os modelos. Lembrete: a importância reflete as premissas do simulador, não uma descoberta sobre usuários.
-- **Margem:** o teto do simulador (a probabilidade escondida) chega a PR-AUC 0,340 e precisão 38,3% com a mesma taxa de sinal; Gradient Boosting está em 0,143 e 18,2%. A parte que falta vem do que nenhum dado observa (a abertura social de cada pessoa) e do sorteio do resultado.
-- **Custo:** Gradient Boosting pontua um encontro em 0,002 ms, sem impedimento para o sinal em tempo real (CC7).
-- **Recomendação para o CC5:** otimizar Gradient Boosting com Optuna, mantendo o baseline como referência explicável.
+- **Margem:** o teto do simulador (a probabilidade escondida) chega a PR-AUC 0,396 e precisão 53,4% com a mesma taxa de sinal; AdaBoost está em 0,186 e 24,1%. A parte que falta vem do que nenhum dado observa (a abertura social de cada pessoa) e do sorteio do resultado.
+- **Custo:** AdaBoost pontua um encontro em 0,018 ms, sem impedimento para o sinal em tempo real (CC7).
+- **Recomendação para o CC5:** otimizar AdaBoost com Optuna, mantendo o baseline como referência explicável.
 
 ## 9. Limitações
 
