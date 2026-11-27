@@ -9,7 +9,7 @@ O protótipo atual implementa este contrato. A integração com a pulseira físi
 | `opinion/pulseira/{id}/encontro` | pulseira → backend | 1 | ao fim de um encontro |
 | `opinion/pulseira/{id}/interesse` | pulseira → backend | 1 | usuário toca na pulseira |
 | `opinion/pulseira/{id}/status` | pulseira → backend | 1 | usuário troca o modo de descoberta |
-| `opinion/pulseira/{id}/feedback` | backend → pulseira | 1 | aviso por afinidade alta |
+| `opinion/pulseira/{id}/feedback` | backend → pulseira | 1 | aviso por afinidade alta (na proximidade) e sinal do modelo (após o encontro) |
 
 `{id}` é o identificador da pulseira (`PUL-0001`). O backend sabe de quem é cada pulseira.
 
@@ -78,6 +78,22 @@ encontros**. O histórico de modos alimenta a taxa de silenciamento (seção 3.2
 `midias` contém todas as categorias que atingiram o corte. A mensagem vai para o tópico
 da pulseira publicadora. O backend registra o id do encontro para evitar repetir o aviso
 em reentregas da detecção. O padrão físico de luz segue em validação com Design.
+
+### Sinal do modelo após o encontro (`tipo: previsao_48h`, CC7)
+
+Publicado no mesmo tópico pelo consumidor de inferência (`python -m opinion.inferencia_mqtt`)
+quando a chance estimada de interação em 48 h passa do limiar do modelo de produção:
+
+```json
+{"v": 1, "tipo": "previsao_48h", "encontro_id": "e-live-1a2b3c4d", "nivel": "periferico_perceptivel",
+ "padrao": "luz_pulsante", "probabilidade": 0.31, "midias": ["musica"],
+ "mensagem": "Vocês têm boa chance de se conectar no OpiniOn. Que tal ver o perfil?", "ts": "2026-11-27T19:57:35"}
+```
+
+`nivel` segue as faixas da seção 4.5: `periferico_leve` a partir do limiar e
+`periferico_perceptivel` a partir de 1,5 × limiar (`config/modelo.yaml → producao`). Abaixo do
+limiar nada é enviado. Pulseiras em modo `pausado` não recebem o sinal; a inferência é gravada
+mesmo assim em `inferencias`. Mensagens sem `tipo` são o aviso de afinidade.
 
 ## O que o serviço de ingestão faz com cada mensagem
 
