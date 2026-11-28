@@ -21,8 +21,10 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import yaml
-from sklearn.ensemble import HistGradientBoostingClassifier, RandomForestClassifier
+from sklearn.ensemble import AdaBoostClassifier, HistGradientBoostingClassifier, RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.neural_network import MLPClassifier
 from sklearn.metrics import (average_precision_score, brier_score_loss, confusion_matrix, precision_recall_curve,
                              roc_auc_score)
 from sklearn.pipeline import Pipeline
@@ -33,7 +35,11 @@ from opinion.modelo import CONFIG_MODELO, PASTA_PROCESSADOS
 
 
 def config(caminho=CONFIG_MODELO) -> dict:
-    return yaml.safe_load(Path(caminho).read_text(encoding="utf-8"))
+    """config/modelo.yaml; MLFLOW_TRACKING_URI (Docker: servidor MLflow) substitui o SQLite local."""
+    cfg = yaml.safe_load(Path(caminho).read_text(encoding="utf-8"))
+    if os.getenv("MLFLOW_TRACKING_URI"):
+        cfg["mlflow"]["tracking_uri"] = os.environ["MLFLOW_TRACKING_URI"]
+    return cfg
 
 
 def carregar(pasta=PASTA_PROCESSADOS) -> tuple[pd.DataFrame, dict]:
@@ -119,6 +125,19 @@ def _pipeline(tipo: str, params: dict) -> Pipeline:
         return Pipeline([("clf", RandomForestClassifier(n_jobs=-1, random_state=0, **params))])
     if tipo == "hist_gb":
         return Pipeline([("clf", HistGradientBoostingClassifier(random_state=0, **params))])
+    if tipo == "knn":            # distância exige escala comparável entre features
+        return Pipeline([("escala", StandardScaler()), ("clf", KNeighborsClassifier(n_jobs=-1, **params))])
+    if tipo == "adaboost":
+        p = dict(params)
+        base = DecisionTreeClassifier(max_depth=p.pop("max_depth", 1), random_state=0)
+        return Pipeline([("clf", AdaBoostClassifier(estimator=base, random_state=0, **p))])
+    if tipo == "mlp":
+        p = dict(params)
+        if isinstance(p.get("hidden_layer_sizes"), list):
+            p["hidden_layer_sizes"] = tuple(p["hidden_layer_sizes"])
+        clf = MLPClassifier(max_iter=300, early_stopping=True, validation_fraction=0.1, n_iter_no_change=15,
+                            random_state=0, **p)
+        return Pipeline([("escala", StandardScaler()), ("clf", clf)])
     raise ValueError(tipo)
 
 
