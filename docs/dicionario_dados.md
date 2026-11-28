@@ -117,3 +117,18 @@ e `midias` (separadas por `|`) para deduplicar o envio. Esse registro identifica
 de aviso. A confirmação de que uma pessoa percebeu o sinal exigiria medição na pulseira.
 O arquivo oculto `encontros_ocultos.csv` contém `midias_sinalizadas` para conferir a regra
 na simulação. O checkpoint grava suas demonstrações locais em `data/processed/avisos_categoria.csv`.
+
+## Tabela `inferencias` (CC7)
+
+Gravada pelo consumidor de inferência (`origem = mqtt`) e pela API quando chamada com
+`registrar=true` (`origem = api`). Lida pelo dashboard via API.
+
+| Coluna | Descrição |
+|---|---|
+| encontro_id, pulseira_id, usuario_a, usuario_b, inicio, fim, local | o encontro pontuado (IDs já traduzidos) |
+| probabilidade | chance estimada de interação em 48 h (modelo calibrado) |
+| limiar, sinal, nivel | limiar do modelo, se passou dele e a faixa do sinal (`nenhum`, `periferico_leve`, `periferico_perceptivel`) |
+| midias_aviso, compat_score, algum_segue | mídias com afinidade alta, afinidade geral e se já se seguiam |
+| modelo, latencia_ms | versão do modelo no MLflow e tempo de pontuação |
+| feedback_enviado | 1 se o sinal foi publicado na pulseira (não é enviado a pulseiras pausadas) |
+| origem, criado_em | `mqtt` ou `api`; quando foi pontuado |

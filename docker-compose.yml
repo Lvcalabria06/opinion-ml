@@ -1,4 +1,9 @@
-# OpiniOn — CC1 + CC2: pulseira virtual -> MQTT -> ingestão -> banco -> Airflow -> dataset do modelo
+# OpiniOn — a solução inteira com um comando (CC8)
+#
+#   pulseira virtual → MQTT → ingestão → PostgreSQL → Airflow (pipeline + treino) → MLflow
+#        ↑                                                                            ↓
+#        └──────── feedback (MQTT) ←── consumidor de inferência ←─────── modelo @producao
+#                                         API de inferência ──→ dashboard
 #
 #   cp .env.example .env      (uma vez; ajuste as senhas)
 #   docker compose up --build
@@ -6,25 +11,36 @@
 #   mosquitto        broker MQTT ............................ localhost:1883
 #   postgres         banco de dados ......................... localhost:5432 (credenciais do .env)
 #   carga            gera o bootstrap (se ainda não existir) e carrega o histórico do app
-#   ingestao         recebe proximidade/encontros/interesses/status e envia feedback
+#   ingestao         recebe proximidade/encontros/interesses/status e envia o aviso de afinidade
 #   pulseira-replay  publica as 12 semanas do bootstrap via MQTT (roda uma vez, ~2 min)
+#   mlflow           rastreamento e registro de modelos ...... http://localhost:5000
+#   airflow          pipeline de dados + treino do modelo de produção ... http://localhost:8080 (sem login)
+#                    a DAG opinion_pipeline roda sozinha ao subir (e depois todo dia)
+#   inferencia       pontua cada encontro novo que chega pelo MQTT e devolve o sinal à pulseira
 #   pulseira-ao-vivo continua gerando encontros novos em tempo real
-#   airflow          pipeline de dados (CC2) ................ http://localhost:8080 (sem login em desenvolvimento)
+#   api              API de inferência (FastAPI) ............. http://localhost:8000/docs
+#   dashboard        painel (Streamlit) ...................... http://localhost:8501
 #   adminer          ver o banco no navegador ............... http://localhost:8081
 #                    (Sistema: PostgreSQL · Servidor: postgres · usuário/senha/base do .env)
+#
+# Ordem: carga → ingestão → replay → Airflow (pipeline → treino → registra opinion-producao@producao
+# no MLflow) → inferência e API passam a responder → pulseira ao vivo recebe sinais.
+# O primeiro treino leva alguns minutos depois do replay; até lá a API responde 503 em /prever.
 #
 # Depois que subir:
 #   docker compose exec ingestao python -m opinion.checkpoint1
 #   docker compose exec ingestao python -m opinion.verificar_replay
-#   docker compose exec ingestao python -m opinion.consultar
-#   docker compose exec airflow airflow dags test opinion_pipeline   (ou botão Trigger na interface)
+#   docker compose logs -f inferencia                       (encontros ao vivo sendo pontuados)
+#   docker compose exec airflow airflow dags test opinion_pipeline   (rodar o pipeline de novo na mão)
 
 x-app: &app
   build: .
-  environment:
+  environment: &app-env
     DATABASE_URL: postgresql://${POSTGRES_USER:-opinion}:${POSTGRES_PASSWORD:?crie o arquivo .env com cp .env.example .env}@postgres:5432/${POSTGRES_DB:-opinion}
     MQTT_HOST: mosquitto
     MQTT_PORT: "1883"
+    MLFLOW_TRACKING_URI: http://mlflow:5000
+    MLFLOW_DISABLE_AGENT_HINT: "1"
     OPINION_SEGREDO_TOKEN: ${OPINION_SEGREDO_TOKEN:?crie o arquivo .env com cp .env.example .env}
     PYTHONUNBUFFERED: "1"
   volumes:
@@ -78,11 +94,22 @@ services:
       ingestao: {condition: service_started}
     restart: "no"
 
-  pulseira-ao-vivo:
+  mlflow:
     <<: *app
-    command: python -m embedded.pulseira_virtual ao-vivo --por-minuto ${ENCONTROS_POR_MINUTO:-20}
-    depends_on:
-      pulseira-replay: {condition: service_completed_successfully}
+    # Servidor com proxy de artefatos: todos os serviços gravam e leem modelos por HTTP,
+    # sem depender de caminhos de disco iguais entre containers.
+    command: >-
+      mlflow server --host 0.0.0.0 --port 5000
+      --backend-store-uri sqlite:////mlflow/mlflow.db
+      --artifacts-destination /mlflow/artifacts
+      --allowed-hosts "mlflow,mlflow:5000,localhost,localhost:5000,127.0.0.1,127.0.0.1:5000"
+    ports: ["5000:5000"]
+    volumes:
+      - mlflow-data:/mlflow
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/health')"]
+      interval: 5s
+      retries: 30
     restart: unless-stopped
 
   airflow:
@@ -94,6 +121,8 @@ services:
     user: "${AIRFLOW_UID:-50000}:0"
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-opinion}:${POSTGRES_PASSWORD:?crie o arquivo .env com cp .env.example .env}@postgres:5432/${POSTGRES_DB:-opinion}
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+      MLFLOW_DISABLE_AGENT_HINT: "1"
       OPINION_HOME: /opt/opinion
       OPINION_DATA_DIR: /opt/opinion/data
       OPINION_FONTE: banco
@@ -101,6 +130,7 @@ services:
       PYTHONPATH: /opt/opinion/src
       AIRFLOW__CORE__DAGS_FOLDER: /opt/opinion/dags
       AIRFLOW__CORE__LOAD_EXAMPLES: "False"
+      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "False"     # a DAG roda sozinha ao subir
       AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_ALL_ADMINS: "True"   # sem login — só para desenvolvimento
       AIRFLOW__API__PORT: "8080"
     ports: ["8080:8080"]
@@ -111,6 +141,49 @@ services:
       - ./data:/opt/opinion/data
     depends_on:
       pulseira-replay: {condition: service_completed_successfully}
+      mlflow: {condition: service_healthy}
+
+  inferencia:
+    <<: *app
+    command: python -m opinion.inferencia_mqtt
+    environment:
+      <<: *app-env
+      OPINION_ESPERA_MODELO_S: "3600"      # aguarda o primeiro treino da DAG
+    depends_on:
+      ingestao: {condition: service_started}
+      mlflow: {condition: service_healthy}
+    restart: unless-stopped
+
+  pulseira-ao-vivo:
+    <<: *app
+    command: python -m embedded.pulseira_virtual ao-vivo --por-minuto ${ENCONTROS_POR_MINUTO:-20}
+    depends_on:
+      pulseira-replay: {condition: service_completed_successfully}
+    restart: unless-stopped
+
+  api:
+    <<: *app
+    command: uvicorn api.main:app --host 0.0.0.0 --port 8000
+    ports: ["8000:8000"]
+    depends_on:
+      carga: {condition: service_completed_successfully}
+      mlflow: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/saude')"]
+      interval: 10s
+      retries: 30
+    restart: unless-stopped
+
+  dashboard:
+    <<: *app
+    command: streamlit run app/dashboard.py --server.port 8501 --server.address 0.0.0.0 --server.headless true
+    environment:
+      <<: *app-env
+      OPINION_API_URL: http://api:8000
+    ports: ["8501:8501"]
+    depends_on:
+      api: {condition: service_started}
+    restart: unless-stopped
 
   adminer:
     image: adminer:4
@@ -119,3 +192,4 @@ services:
 
 volumes:
   pg-data:
+  mlflow-data:

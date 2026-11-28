@@ -1,32 +1,34 @@
-# OpiniOn — Ciência da Computação (Machine Learning)
+# OpiniON — Ciência da Computação (Machine Learning)
+
+| | |
+|---|---|
+| **Nome da solução** | **OpiniON** — pulseira que detecta encontros entre pessoas com gostos parecidos e um modelo que estima a chance de elas se conectarem no app |
+| **Google Sites** | https://sites.google.com/cesar.school/opinion |
+| **Relatório (template SBC)** | [`reports/relatorio_opinion.pdf`](reports/relatorio_opinion.pdf) |
+
+**Equipe de Desenvolvimento (Ciência da Computação)**
+
+| Nome | E-mail | GitHub |
+|---|---|---|
+| João Pedro | jpsa@cesar.school | _a preencher_ |
+| Lucas Calabria | lvc@cesar.school | [@Lvcalabria06](https://github.com/Lvcalabria06) |
+| Maria Júlia Dantas | mjdma@cesar.school | _a preencher_ |
+| Maria Luíza Dantas | mldt@cesar.school | _a preencher_ |
+
+**Equipe de Design**
+
+| Nome | E-mail |
+|---|---|
+| Fábio André Oliveira Lins | faol@cesar.school |
+| Marcus Vinicius Menezes Barbosa | mvmb@cesar.school |
+| Pedro Mota | pom2@cesar.school |
+| Rodrigo Quirino de Mello | rqm@cesar.school |
 
 **Aviso de afinidade por categoria.** Ao detectar proximidade, a pulseira virtual
 publica `proximidade`. O backend consulta as avaliações anteriores e envia à pulseira
-publicadora uma mensagem com as mídias em que o par atingiu afinidade alta. Um encontro pode
-render um único aviso com música e filmes. A duração e o RSSI médio chegam ao fim do encontro.
-
-Para reproduzir o exemplo musical com o ambiente da opção B e o bootstrap versionado:
-
-```bash
-python -m opinion.pipeline.executar --fonte arquivos
-python -m opinion.modelo.comparar --midia musica
-python -m opinion.checkpoint2 --usuarios usr-00694 usr-01029
-```
-
-O treino por mídia usa os encontros em que ambos tinham avaliações daquela mídia, inclusive
-pares de baixa afinidade. O comando aceita também `filme`, `serie`, `jogo` e `livro`.
-O comparador avalia quatro famílias e registra a selecionada em cada mídia para estimar
-a interação em até 48 h. O aviso usa o corte `compat_score.afinidade_alta` de
-`config/pipeline.yaml`. O baseline acadêmico CC3 segue acessível após
-`python -m opinion.modelo.treinar`, com `python -m opinion.checkpoint2 --baseline`.
-O experimento atual usa `opinion-cc4-aviso-categoria-<midia>` no MLflow.
-Os números da EDA e da comparação geral abaixo estão identificados como históricos.
-[Regra e resultados por mídia](docs/match_por_midia.md) · [Contrato da pulseira](docs/contrato_mqtt.md)
-
-> **A preencher pela equipe** (exigido pelo item 6 da especificação):
-> - **Nome da solução:** _a definir_
-> - **Membros:** _Nome Sobrenome (@usuario-github), …_
-> - **Google Sites do projeto:** _link_
+publicadora uma mensagem com as mídias em que o par atingiu afinidade alta. **Ao fim do
+encontro**, o consumidor de inferência estima com o modelo de produção a chance de os dois
+interagirem no app em até 48 h e, se ela passa do limiar, devolve o sinal à pulseira.
 
 **Pergunta do modelo (seção 3.4):** dado que dois usuários acabaram de se encontrar, qual a chance de eles
 interagirem no OpiniOn nas próximas 48 horas?
@@ -38,7 +40,12 @@ Este repositório acumula as entregas de CC sprint a sprint.
 | 1 | **CC1** | Pulseira virtual publicando via MQTT, serviço de ingestão, banco, dataset simulado de 12 semanas, Checkpoint 1 | `src/opinion/` · `docs/contrato_mqtt.md` |
 | 2 | **CC2** | Pipeline no Airflow (ingestão, compatibilidade, features, label, preparação), notebook de EDA, validação da simulação, material da sessão com o Design | `src/opinion/pipeline/` · `dags/` · `notebooks/` · `docs/validacao_simulacao.md` |
 | 3 | **CC3** | Usuários/obras/avaliações da Amazon Reviews 2023; baseline (Regressão Logística) no MLflow; Checkpoint 2 | `src/opinion/fontes/` · `src/opinion/modelo/` · `docs/fontes_dados.md` |
-| 4 | **CC4** | Comparação de 4 modelos no MLflow (matriz de confusão, ROC/AUC, precisão × recall) e análise crítica | `src/opinion/modelo/comparar.py` · `docs/comparacao_modelos.md` |
+| 4 | **CC4** | Comparação de 7 famílias no MLflow (Regressão Logística, Árvore, Random Forest, Gradient Boosting, **KNN, AdaBoost, MLP**), com matriz de confusão, ROC/AUC, precisão × recall e análise crítica | `src/opinion/modelo/comparar.py` · `docs/comparacao_modelos.md` |
+| 5 | **CC5** | Otimização bayesiana (Optuna TPE) do vencedor do CC4, comparada com busca aleatória e com a grade; calibração; tudo no MLflow | `src/opinion/modelo/otimizar.py` · `docs/otimizacao.md` |
+| 6 | **CC6** | Stratified k-fold agrupado por par, estabilidade, overfitting/underfitting (curva de aprendizado) e janela temporal | `src/opinion/modelo/validacao_cruzada.py` · `docs/validacao_cruzada.md` |
+| 7 | **CC7** | Modelo integrado ao pipeline: consumidor MQTT pontua cada encontro novo e devolve o sinal à pulseira; API de inferência (FastAPI); retreino na DAG | `src/opinion/inferencia*.py` · `api/` · `src/opinion/modelo/producao.py` |
+| 8 | **CC8** | `docker compose up` sobe tudo: MQTT, PostgreSQL, ingestão, pulseira, Airflow, MLflow, inferência, API e dashboard | `docker-compose.yml` |
+| 9 | **CC9** | Dashboard (Streamlit): encontros e inferências em tempo real, sinais, métricas do modelo e indicadores (conversão, precisão dos sinais, silenciamento) | `app/` |
 
 Usuários, obras e avaliações são **reais** (Amazon Reviews 2023). Encontros da pulseira e o label
 ainda são simulados. Qualquer métrica mede essa mistura, não usuários reais da pulseira.
@@ -51,14 +58,16 @@ ainda são simulados. Qualquer métrica mede essa mistura, não usuários reais 
 ## Visão geral
 
 ```
- Amazon Reviews 2023 (real)          SPRINT 1 (CC1)                         SPRINT 2 (CC2)              SPRINT 3 (CC3/CC4)
- fontes.amazon2023 ─► data/reais/ ─► gerar_bootstrap ─► pulseira_virtual ─► MQTT ─► ingestao ─► BANCO
-                                          │                                      Airflow: opinion_pipeline
-                                          └─► carregar_historico_app              … ─► dataset_modelo.parquet
-                                                                                              │
-                                                                                              ▼
-                                                                                    opinion.modelo.comparar --midia ─► MLflow
-                                                                                    Checkpoint 2
+ Amazon Reviews 2023 (real)       CC1                                     CC2 / CC7
+ fontes.amazon2023 ─► gerar_bootstrap ─► pulseira_virtual ─► MQTT ─► ingestao ─► PostgreSQL
+                                              ▲   │  (encontro)                       │
+                                    feedback  │   └──► inferencia_mqtt ◄── modelo ◄──┤ Airflow: opinion_pipeline
+                                              └──────────────┘  │       @producao     │ ingestao → compat/features/label
+                                                                ▼          ▲          │ → preparacao → treino ─► MLflow
+                                                          inferencias      │
+                                                                │   CC3–CC6: treinar · comparar · otimizar · validacao_cruzada
+                                                                ▼
+                                                   API (FastAPI) ─► Dashboard (Streamlit)   CC9
 ```
 
 ---
@@ -170,18 +179,92 @@ mlflow ui --backend-store-uri sqlite:///mlruns/mlflow.db   # http://localhost:50
 
 ## Sprint 4 — CC4: comparação de modelos
 
-`src/opinion/modelo/comparar.py` compara Regressão logística, Árvore de decisão, Random Forest e
-Gradient Boosting no mesmo protocolo do CC3 (escolha e limiar na validação, teste medido uma vez).
-Para cada mídia, um experimento próprio no MLflow (`opinion-cc4-aviso-categoria-<midia>`).
-Cada modelo tem um run com métricas, matriz de confusão,
+`src/opinion/modelo/comparar.py` compara **sete famílias** no mesmo protocolo do CC3 (escolha e
+limiar na validação, teste medido uma vez): Regressão Logística, Árvore de Decisão, Random Forest,
+Gradient Boosting e, da lista da especificação, **KNN, AdaBoost e MLP** (as grades ficam em
+`config/modelo.yaml → comparacao`). Cada modelo tem um run no MLflow com métricas, matriz de confusão,
 curvas ROC e precisão × recall, calibração, importância por permutação e o modelo; no run pai, os
-gráficos lado a lado e o intervalo de confiança das diferenças. A comparação geral histórica está em
-[`docs/comparacao_modelos.md`](docs/comparacao_modelos.md). O vencedor de cada mídia vai para
-`opinion-cc4-aviso-categoria-<midia>@melhor`; os resultados atuais estão em
+gráficos lado a lado e o intervalo de confiança das diferenças.
+
+Na comparação geral, **AdaBoost** foi escolhido na validação (PR-AUC entre desconhecidos 0,136 na
+validação e 0,186 no teste, contra 0,131 da regra simples e 0,014 do acaso). A análise crítica está em
+[`docs/comparacao_modelos.md`](docs/comparacao_modelos.md); os recortes por mídia, em
 [`docs/match_por_midia.md`](docs/match_por_midia.md).
 
 ```bash
-python -m opinion.modelo.comparar --midia musica  # repita para filme, serie, livro e jogo
+python -m opinion.modelo.comparar                  # geral: reescreve docs/comparacao_modelos.md (~8 min)
+python -m opinion.modelo.comparar --midia musica   # por mídia: repita para filme, serie, livro e jogo
+```
+
+## Sprint 5 — CC5: otimização de hiperparâmetros
+
+`src/opinion/modelo/otimizar.py` otimiza o vencedor do CC4 com **Optuna (TPE, otimização bayesiana)**,
+com 30 tentativas, e roda uma **busca aleatória** com o mesmo orçamento como controle. As duas começam
+pela melhor configuração da grade do CC4. O objetivo é a PR-AUC entre desconhecidos na validação; o
+teste é medido uma vez. Depois da busca, as probabilidades são **calibradas** (sigmoide) para a API
+mostrar a chance como probabilidade. Todas as tentativas viram runs filhos no MLflow
+(`opinion-cc5-otimizacao`) e o modelo final é registrado como `opinion-cc5-otimizado@otimizado`.
+
+Resultado: AdaBoost com `n_estimators=292, learning_rate=0,94, max_depth=1`. Na validação, a PR-AUC
+subiu de 0,136 (grade) para 0,150. No teste ficou em 0,188 (IC 95% 0,146–0,248), e o ganho
+sobre a grade não se confirma no teste. A calibração reduziu o Brier de 0,101 para 0,063.
+Detalhes em [`docs/otimizacao.md`](docs/otimizacao.md).
+
+```bash
+python -m opinion.modelo.otimizar                  # ~15 min; --trials 10 para um teste rápido
+```
+
+## Sprint 6 — CC6: validação cruzada, estabilidade e generalização
+
+`src/opinion/modelo/validacao_cruzada.py` avalia o modelo otimizado, a regressão logística e a regra
+com **stratified k-fold agrupado por par** (`StratifiedGroupKFold`, k = 5, grupo `par_id`) nas
+semanas 1–10, mede média, desvio e coeficiente de variação entre folds e compara treino com avaliação
+(overfitting). Também traça uma **curva de aprendizado** e uma **janela temporal expansível**
+(treina até a semana k−1 e avalia a semana k). Resultados e discussão em
+[`docs/validacao_cruzada.md`](docs/validacao_cruzada.md); runs no MLflow (`opinion-cc6-validacao-cruzada`).
+
+```bash
+python -m opinion.modelo.validacao_cruzada         # ~10 min
+```
+
+## Sprint 7 — CC7: modelo integrado ao pipeline
+
+- **Consumo automático** (`src/opinion/inferencia_mqtt.py`): assina `opinion/pulseira/+/encontro`,
+  traduz os IDs rotativos, calcula as features com as **mesmas funções do pipeline** (só com o passado
+  do encontro), estima a chance de interação em 48 h e grava em `inferencias`. Se a chance passa do
+  limiar, publica o sinal em `opinion/pulseira/{id}/feedback` (`periferico_leve` ou
+  `periferico_perceptivel`; nunca para quem está com a pulseira pausada). Contrato em
+  [`docs/contrato_mqtt.md`](docs/contrato_mqtt.md).
+- **API de inferência** (`api/main.py`, FastAPI, documentação em `/docs`): `POST /prever` recebe o
+  encontro no formato do contrato MQTT e devolve a chance; `POST /prever/usuarios` faz o mesmo com os
+  IDs reais; `GET /modelo`, `/inferencias`, `/encontros/recentes` e `/indicadores` alimentam o dashboard.
+- **Retreino** (`src/opinion/modelo/producao.py`): última task da DAG. Reajusta a configuração do CC5
+  com os dados novos, calibra, e só promove `opinion-producao@producao` se superar a regra simples na
+  validação. API e consumidor recarregam o modelo sozinhos quando o alias muda.
+
+```bash
+uvicorn api.main:app --port 8000                   # http://localhost:8000/docs
+python -m opinion.inferencia_mqtt                  # pontua os encontros que chegam pelo MQTT
+python -m opinion.modelo.producao                  # (re)treina e promove o modelo de produção
+```
+
+## Sprint 8 — CC8: a solução inteira no Docker Compose
+
+`docker compose up --build` sobe 12 serviços na ordem certa: broker, banco, carga do histórico,
+ingestão, replay da pulseira, **MLflow** (servidor com proxy de artefatos), **Airflow** (a DAG roda
+sozinha ao subir e termina registrando o modelo de produção), **consumidor de inferência**, pulseira
+ao vivo, **API**, **dashboard** e Adminer. Ver a Opção A abaixo.
+
+## Sprint 9 — CC9: dashboard
+
+`app/dashboard.py` (Streamlit) lê tudo da API e se atualiza sozinho: encontros que chegam pela
+ingestão, inferências e sinais emitidos, a distribuição dos níveis de sinal, as métricas de validação e
+teste do modelo servido e os indicadores da seção 3.2: **taxa de conversão de encontros**, **precisão
+dos sinais** (aviso de afinidade e sinal do modelo) e **taxa de silenciamento** (sinal seguido de pausa
+da pulseira em até 24 h). A aba "Simular encontro" pontua um par na hora.
+
+```bash
+streamlit run app/dashboard.py                     # http://localhost:8501 (API em OPINION_API_URL)
 ```
 
 ---
@@ -195,16 +278,23 @@ cp .env.example .env        # uma vez: credenciais e segredo locais (o .env não
 docker compose up --build
 ```
 
-Sobe o broker, o PostgreSQL, a ingestão e a pulseira (replay de cerca de 2 min, depois ao vivo), além do **Airflow** e do Adminer:
-
 | Serviço | Endereço |
 |---|---|
-| Airflow (sem login, só desenvolvimento) | http://localhost:8080 → DAG `opinion_pipeline` → **Trigger** |
+| Dashboard | http://localhost:8501 |
+| API de inferência (Swagger) | http://localhost:8000/docs |
+| MLflow | http://localhost:5000 |
+| Airflow (sem login, só desenvolvimento) | http://localhost:8080 → DAG `opinion_pipeline` |
 | Adminer (banco) | http://localhost:8081 (PostgreSQL · servidor `postgres` · usuário, senha e base do seu `.env`) |
+
+Sequência esperada: carga do histórico → replay da pulseira (~2–5 min) → a DAG roda sozinha
+(~2 min) e registra `opinion-producao@producao` no MLflow → o serviço `inferencia` carrega o modelo e
+passa a pontuar os encontros ao vivo (`docker compose logs -f inferencia`) → o dashboard mostra tudo.
+Até o primeiro treino terminar, `/prever` responde 503.
 
 ```bash
 docker compose exec ingestao python -m opinion.checkpoint1         # Checkpoint 1
-docker compose exec airflow airflow dags test opinion_pipeline     # pipeline sem abrir a interface
+docker compose exec airflow airflow dags test opinion_pipeline     # pipeline + treino na mão
+docker compose logs -f inferencia                                  # encontros ao vivo sendo pontuados
 ```
 
 No **Linux**, coloque o seu `id -u` em `AIRFLOW_UID` no `.env`, para o Airflow conseguir escrever em `./data`.
@@ -242,8 +332,17 @@ python -m opinion.validacao_simulacao            # regera docs/validacao_simulac
 python -m opinion.modelo.treinar
 python -m opinion.checkpoint2 --baseline
 
-# CC4 — comparação de modelos
-python -m opinion.modelo.comparar --midia musica
+# CC4 a CC6 — comparação, otimização e validação cruzada (registram no MLflow e reescrevem docs/)
+python -m opinion.modelo.comparar
+python -m opinion.modelo.otimizar
+python -m opinion.modelo.validacao_cruzada
+
+# CC7 e CC9 — modelo de produção, API, consumidor MQTT e dashboard
+python -m opinion.modelo.producao
+uvicorn api.main:app --port 8000                 # terminal 4
+python -m opinion.inferencia_mqtt                # terminal 5
+streamlit run app/dashboard.py                   # terminal 6
+python -m embedded.pulseira_virtual ao-vivo --por-minuto 30   # encontros novos
 ```
 
 Sem broker nem banco, o pipeline também lê direto dos arquivos: `python -m opinion.pipeline.executar --fonte arquivos`.
@@ -267,6 +366,11 @@ Siga a **Opção B** acima, nesta ordem. Cada teste prova uma parte dos requisit
 | 9 | `python -m opinion.validacao_simulacao` | premissas, sanidade e sensibilidade | CC2 |
 | 10 | abrir `data/reais/amazon2023/fonte.json` | usuários/obras/avaliações reais com fonte citada | CC3 |
 | 11 | `python -m opinion.checkpoint2 --usuarios usr-00694 usr-01029` | **Checkpoint 2**: encontro novo recebe aviso musical e estimativa de interação | CC3 |
+| 12 | `python -m opinion.modelo.comparar` e abrir `docs/comparacao_modelos.md` | 7 famílias, matriz de confusão, ROC, PR e análise crítica | CC4 |
+| 13 | `python -m opinion.modelo.otimizar` e abrir o MLflow (`opinion-cc5-otimizacao`) | um run por tentativa; `opinion-cc5-otimizado@otimizado` | CC5 |
+| 14 | `python -m opinion.modelo.validacao_cruzada` | k-fold agrupado por par, estabilidade, curva de aprendizado | CC6 |
+| 15 | API + `python -m opinion.inferencia_mqtt` + `pulseira_virtual ao-vivo` | cada encontro novo é pontuado e o sinal volta pelo tópico `feedback` | CC7 |
+| 16 | `streamlit run app/dashboard.py` | tempo real, métricas do modelo e indicadores | CC9 |
 
 ### 1. Dataset simulado
 Em `data/bootstrap/relatorio_simulacao.md`, confira: 1.200 usuários, 69.384 encontros e **8,12% com `conectou = 1`**, além de picos de encontros nas semanas 3, 7 e 11 (convenção).
@@ -321,9 +425,9 @@ Dataset do modelo: 68,315 encontros | taxa de conexão 8.16%
   ...
 ```
 
-### 7. Testes automatizados (~35 s)
+### 7. Testes automatizados (~1 min)
 ```
-34 passed
+43 passed
 ```
 O teste principal recalcula as features de 30 encontros **apagando tudo o que aconteceu depois do início de cada um**. Se algum valor mudar, alguma feature estaria olhando para o futuro, e o teste falha.
 
@@ -349,14 +453,21 @@ Para recomeçar do zero, pare a ingestão, apague `data/opinion.db` e repita a p
 
 ## Testado / não testado
 
-- **Testado:**
-  - fluxo CC1 completo (SQLite + broker local), Checkpoint 1 e DAG no **Airflow 3.1** em rodada anterior;
-  - replay do bootstrap atual pela classe de ingestão, com 145.554 mensagens aceitas e 6.972 avisos com os motivos esperados; o broker MQTT da rodada atual ainda precisa de verificação integrada;
-  - testes automatizados;
-  - notebook executado do início ao fim em rodada anterior; o HTML está marcado como histórico;
-  - validação nos 3 cenários, regerada em 18/11/2026: 15 OK, 1 atenção, 1 falha;
-  - modelos por mídia no MLflow e demonstração do **Checkpoint 2**;
-- **Não testado:** `docker compose` (com PostgreSQL e o container do Airflow), porque o ambiente onde isso foi escrito não tinha Docker. Rodem uma vez antes de apresentar.
+Rodada de 27/11/2026, num ambiente Linux com PostgreSQL 16, Mosquitto 2, Airflow 3.1 e um servidor
+MLflow configurados **como no `docker-compose.yml`** (mesmos comandos, variáveis e portas):
+
+- **Testado de ponta a ponta:** pulseira virtual → MQTT → ingestão → **PostgreSQL** (replay das 12
+  semanas: 69.384 encontros, 0 rejeitadas, `verificar_replay` e Checkpoint 1 OK) → **Airflow**
+  (`airflow dags test opinion_pipeline`: as 7 tasks em `success`, incluindo `treino`) → **servidor
+  MLflow** (`opinion-producao@producao` registrado pelo Airflow com `mlflow-skinny`) → consumidor de
+  inferência e **API** carregando o modelo pelo servidor → pulseira ao vivo com encontros pontuados
+  automaticamente → **dashboard** (verificado com `streamlit.testing`, sem erros, inclusive a simulação).
+- **Testes automatizados:** `python -m pytest tests -q` (inclui CC5, CC6, consumidor MQTT, API e indicadores).
+- **Não testado:** o `docker compose up` em si (construção das imagens). O ambiente desta rodada não
+  tinha acesso ao Docker Hub para baixar as imagens base; a sintaxe foi validada com
+  `docker compose config`. Rodem uma vez antes da apresentação.
+- Bug corrigido nesta rodada: com PostgreSQL, consultas com `%` literal (`LIKE 'e-live-%'`) quebravam
+  no psycopg (`verificar_replay`); `Banco._sql` agora escapa o `%`.
 
 ## Estrutura do repositório
 
@@ -370,26 +481,30 @@ são ajustes permitidos pelo próprio item 6.
 ├── notebooks/             EDA do bootstrap e das etapas de preparação
 ├── src/opinion/           código de treinamento, pipeline e backend (pacote Python `opinion`)
 │   ├── pipeline/          CC2: etapas do pipeline (as mesmas funções que a DAG chama)
-│   ├── modelo/            CC3/CC4: baseline, modelos por mídia, pontuação de encontro novo
+│   ├── modelo/            CC3–CC6: baseline, comparação, otimização (Optuna), validação cruzada, produção
 │   ├── fontes/            CC3: download e filtro da Amazon Reviews 2023
 │   ├── gerar_bootstrap.py simulador do mundo (encontros, seguidores, interações, label)
 │   ├── ingestao.py        recebe MQTT, grava encontros e envia avisos por categoria
+│   ├── inferencia.py      CC7: pontua um encontro novo com o modelo de produção do MLflow
+│   ├── inferencia_mqtt.py CC7: consumidor que pontua cada encontro do MQTT e devolve o sinal
+│   ├── indicadores.py     CC9: conversão, precisão dos sinais e silenciamento
 │   └── checkpoint1.py, checkpoint2.py
 ├── embedded/              simulador do sistema embarcado: a pulseira virtual (MQTT)
 ├── dags/                  DAG do Apache Airflow (opinion_pipeline)
-├── api/                   API de inferência (CC7, ainda não implementada)
-├── app/                   dashboard (CC9, ainda não implementado)
+├── api/                   API de inferência (CC7, FastAPI)
+├── app/                   dashboard (CC9, Streamlit)
 ├── mlruns/                MLflow: mlflow.db e artefatos (fora do Git, só o README é versionado)
-├── reports/               relatório em PDF no template SBC
+├── reports/               relatório em PDF no template SBC (fonte LaTeX em reports/latex/)
 ├── config/                parâmetros em YAML: simulação, fontes, pipeline, modelos
 ├── docs/                  contexto, decisões, status, dicionário de dados, comparação de modelos
 ├── tests/                 testes automáticos (pytest)
 ├── infra/                 Mosquitto e Dockerfile do Airflow
-├── Dockerfile             imagem dos serviços Python (ingestão, carga, pulseira)
+├── Dockerfile             imagem dos serviços Python (ingestão, pulseira, MLflow, inferência, API, dashboard)
 ├── docker-compose.yml     a solução inteira com um comando
 ├── pyproject.toml         torna o pacote de src/ instalável (pip install -e .)
 ├── requirements.txt       dependências dos serviços
-├── requirements-analise.txt  dependências de análise e treino (inclui o pacote)
+├── requirements-ml.txt    modelo, MLflow, Optuna, API e dashboard
+├── requirements-analise.txt  tudo para desenvolver (inclui o pacote)
 └── README.md
 ```
 

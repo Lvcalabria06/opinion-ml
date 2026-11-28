@@ -30,6 +30,8 @@ métricas melhorem.
 - **Aviso por categoria:** a regra usa somente o histórico anterior ao início do encontro e o corte de cada mídia. A estimativa do modelo usa dados disponíveis ao fim.
 - **Honestidade sobre os dados:** métricas medem a simulação. "Melhor algoritmo" e ranking de features
   não são descobertas (ver [`docs/validacao_simulacao.md`](docs/validacao_simulacao.md)).
+- **Mesmas features no treino e na inferência:** a API e o consumidor MQTT usam `opinion.modelo.pontuar.matriz`
+  (funções do pipeline); nunca reimplemente uma feature só para a inferência.
 - **Dados externos têm fonte:** todo dataset público usado é citado (origem, licença, filtro aplicado).
 
 ## Convenções
@@ -49,6 +51,8 @@ pip install -r requirements-analise.txt && cp .env.example .env    # uma vez
 python -m pytest tests -q                                           # fontes, pipeline, baseline
 python -m opinion.pipeline.executar --fonte arquivos                # se data/processed/ estiver vazio
 python -m opinion.modelo.comparar --midia musica                   # CC4 por mídia → MLflow
+python -m opinion.modelo.otimizar --trials 5 --sem-registro        # CC5 rápido, sem gravar
+python -m opinion.modelo.validacao_cruzada --sem-registro          # CC6 sem gravar
 python -m opinion.checkpoint2 --usuarios usr-00694 usr-01029     # aviso musical e estimativa
 ```
 
@@ -73,3 +77,5 @@ O roteiro completo (MQTT, Checkpoint 1, Airflow, Docker) e as saídas esperadas 
 | [`docs/contrato_mqtt.md`](docs/contrato_mqtt.md) | mexer na pulseira virtual, na ingestão ou falar com o Design |
 | [`docs/fontes_dados.md`](docs/fontes_dados.md) | mexer em usuários, obras, avaliações ou baixar dados externos |
 | [`docs/validacao_simulacao.md`](docs/validacao_simulacao.md) | mudar premissas do simulador ou interpretar resultados |
+| [`docs/otimizacao.md`](docs/otimizacao.md) · [`docs/validacao_cruzada.md`](docs/validacao_cruzada.md) | mexer no modelo de produção (CC5/CC6) |
+| [`api/README.md`](api/README.md) · [`app/README.md`](app/README.md) | mexer na API, no consumidor de inferência ou no dashboard |

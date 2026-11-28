@@ -5,6 +5,45 @@ fica em cima. Decisões ainda abertas ficam em [`status.md`](status.md).
 
 ---
 
+## D-017 · 27/11/2026 · Docker Compose com servidor MLflow e treino na DAG (CC8)
+
+- **Decisão:** o compose ganha um servidor MLflow com proxy de artefatos (`--artifacts-destination`).
+  Airflow, API e consumidor falam com ele por HTTP (`MLFLOW_TRACKING_URI`), em vez de compartilhar
+  `mlruns/` por volume. A DAG ganha a task `treino`, que registra `opinion-producao`.
+- **Motivo:** com SQLite + volume, o caminho absoluto dos artefatos gravado por um container não
+  existe nos outros. O treino na DAG fecha o ciclo pulseira → banco → Airflow → modelo → API.
+- **Consequência:** o `scikit-learn` é fixado na mesma versão nas duas imagens (`requirements-ml.txt`
+  e `infra/airflow/Dockerfile`), porque a API carrega o pickle treinado pelo Airflow. Na primeira
+  subida não há CC5 no MLflow do Docker: o treino usa `producao.reserva`, que é a configuração
+  escolhida no CC5.
+
+## D-016 · 27/11/2026 · Inferência após o encontro e sinal pelo tópico feedback (CC7)
+
+- **Decisão:** o aviso de afinidade continua na proximidade (D-013). Ao **fim** do encontro, o
+  consumidor de inferência estima a chance de interação em 48 h com o modelo de produção e, acima do
+  limiar, publica `feedback` com `tipo: previsao_48h`. Faixas: `periferico_leve` a partir do limiar,
+  `periferico_perceptivel` a partir de 1,5 × limiar. Pulseira pausada não recebe sinal.
+- **Motivo:** duração e RSSI só existem no fim do encontro e estão entre as features do modelo.
+- **Consequência:** a API e o dashboard usam o modelo **geral** (todos os encontros). Os modelos por
+  mídia ficam como análise complementar: nos recortes pequenos (jogos, séries) a escolha na validação
+  não se sustentou no teste ([`match_por_midia.md`](match_por_midia.md)).
+
+## D-015 · 27/11/2026 · CC6: k-fold agrupado por par + janela temporal
+
+- **Decisão:** `StratifiedGroupKFold` (k = 5, grupo `par_id`) nas semanas 1–10, sem tocar no teste;
+  complemento com janela temporal expansível e purga de 48 h.
+- **Motivo:** o k-fold pedido pela especificação mede estabilidade, mas mistura semanas; a janela
+  temporal mede o uso real (prever semanas que o modelo não viu).
+
+## D-014 · 27/11/2026 · CC4 com 7 famílias; CC5 com Optuna e calibração
+
+- **Decisão:** a comparação inclui KNN, AdaBoost e MLP (exigência de 3 modelos da lista da
+  especificação; antes havia só Árvore e Random Forest). O vencedor (AdaBoost) é otimizado com Optuna
+  TPE, com busca aleatória de mesmo orçamento como controle, ambas começando pela melhor configuração
+  da grade. As probabilidades finais são calibradas com sigmoide na validação.
+- **Motivo:** a calibração não muda a ordenação nem a PR-AUC, mas o AdaBoost sem calibrar tinha Brier
+  pior que prever a prevalência (0,101 x 0,073); a API e o dashboard mostram a probabilidade como chance.
+
 ## D-013 · 18/11/2026 · Aviso por mídia no início do encontro
 
 O aviso indica os assuntos em que duas pessoas próximas mostram alta afinidade.

@@ -114,6 +114,30 @@ CREATE TABLE IF NOT EXISTS status_pulseira (
     UNIQUE (pulseira_id, ts)
 );
 CREATE INDEX IF NOT EXISTS ix_status_usuario_ts ON status_pulseira(usuario_id, ts);
+
+-- ============================== inferências do modelo (CC7)
+CREATE TABLE IF NOT EXISTS inferencias (
+    encontro_id    TEXT PRIMARY KEY,
+    pulseira_id    TEXT,
+    usuario_a      TEXT,
+    usuario_b      TEXT,
+    inicio         {TS},
+    fim            {TS},
+    local          TEXT,
+    probabilidade  REAL,
+    limiar         REAL,
+    sinal          INTEGER,
+    nivel          TEXT,
+    midias_aviso   TEXT,
+    compat_score   REAL,
+    algum_segue    INTEGER,
+    modelo         TEXT,
+    latencia_ms    REAL,
+    feedback_enviado INTEGER,
+    origem         TEXT,
+    criado_em      {TS}
+);
+CREATE INDEX IF NOT EXISTS ix_inferencias_criado ON inferencias(criado_em);
 """
 
 
@@ -144,7 +168,8 @@ class Banco:
                 self.conn.execute(stmt)
 
     def _sql(self, sql: str) -> str:
-        return sql.replace("?", "%s") if self.postgres else sql
+        # psycopg usa % como marcador: um % literal (LIKE 'e-live-%') precisa virar %%
+        return sql.replace("%", "%%").replace("?", "%s") if self.postgres else sql
 
     def executar(self, sql: str, params: tuple = ()):
         return self.conn.execute(self._sql(sql), params)

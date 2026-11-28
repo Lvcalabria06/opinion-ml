@@ -1,9 +1,9 @@
 """
-DAG opinion_pipeline — CC2
+DAG opinion_pipeline — CC2 + CC7/CC8
 
-    ingestao ──┬── compatibilidade ──┐
-               ├── features ─────────┼── preparacao ── resumo
-               └── label ────────────┘
+    ingestao ──┬── compatibilidade ──┐               ┌── resumo
+               ├── features ─────────┼── preparacao ─┤
+               └── label ────────────┘               └── treino
 
 ingestao         extrai do banco operacional (encontros recebidos via MQTT + histórico do app)
                  para data/staging/, com checagens de consistência
@@ -13,6 +13,10 @@ label            conectou = interação entre os dois em até 48 h após o fim
 preparacao       split temporal + purga, imputação, one-hot, checagens de qualidade,
                  grava data/processed/dataset_modelo.parquet (entrada do CC3)
 resumo           registra no log o tamanho e a taxa de conexão de cada split
+treino           reajusta o modelo otimizado no CC5 com os dados novos, calibra e registra no MLflow
+                 (opinion-producao); só promove para @producao se superar a regra simples na
+                 validação. A API e o consumidor MQTT passam a usar a nova versão sozinhos.
+                 Desligue com OPINION_TREINAR_NA_DAG=0.
 
 Roda todo dia (encontros novos chegam o tempo todo pela pulseira). Para disparar na mão:
 botão "Trigger" na interface, ou  airflow dags test opinion_pipeline
@@ -45,7 +49,7 @@ FONTE = os.getenv("OPINION_FONTE", "banco")   # "banco" (padrão) ou "arquivos" 
     catchup=False,
     max_active_runs=1,
     default_args={"owner": "cc-opinion", "retries": 1, "retry_delay": timedelta(minutes=2)},
-    tags=["opinion", "cc2", "ml"],
+    tags=["opinion", "cc2", "cc7", "ml"],
 )
 def opinion_pipeline():
 
@@ -89,8 +93,23 @@ def opinion_pipeline():
         print(f"Removidos na fronteira treino/validação: {meta['encontros_purgados_fronteira']:,}")
         print("=" * 60)
 
+    @task
+    def treino(meta: dict) -> dict:
+        if os.getenv("OPINION_TREINAR_NA_DAG", "1") == "0":
+            print("Treino desligado (OPINION_TREINAR_NA_DAG=0)")
+            return {"promovido": False}
+        from opinion.modelo.producao import treinar_producao
+        r = treinar_producao()
+        print(f"Modelo {r['familia']} {r['params']} | PR-AUC desconhecidos validação "
+              f"{r['validacao']['pr_auc_desconhecidos']:.3f} (regra {r['regra_validacao']['pr_auc_desconhecidos']:.3f})"
+              f" | {r['mlflow_modelo']} v{r['mlflow_versao']} "
+              f"{'PROMOVIDO' if r['promovido'] else 'não promovido'}")
+        return {"versao": r["mlflow_versao"], "promovido": r["promovido"], "limiar": r["limiar"]}
+
     base = ingestao()
-    resumo(preparacao(compatibilidade(base), features(base), label(base)))
+    meta = preparacao(compatibilidade(base), features(base), label(base))
+    resumo(meta)
+    treino(meta)
 
 
 opinion_pipeline()

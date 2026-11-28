@@ -22,13 +22,27 @@ registrados pelo simulador em todos os encontros. Entre desconhecidos no teste t
 houve interação em 17 de 122 encontros com aviso musical e em 121 de 970 encontros
 com algum aviso.
 
-No modelo de música, Random Forest foi escolhido na validação. No teste, a PR-AUC foi
-0,264 no recorte completo e 0,200 entre desconhecidos. A prevalência entre desconhecidos
-foi 0,023 e a regra de afinidade alcançou PR-AUC de 0,102 nesse grupo. Esses valores
-avaliam todos os pares com histórico musical bilateral, incluindo os que ficaram abaixo
-do corte do aviso. O simulador condiciona as conexões geradas pelo encontro à presença
-do aviso e mantém interações espontâneas do feed e entre amigos. O efeito do aviso em
-pessoas reais exige observação independente.
+### Modelos por mídia (CC4 com sete famílias, 27/11/2026)
+
+Cada recorte compara Regressão Logística, Árvore de Decisão, Random Forest, Gradient Boosting,
+KNN, AdaBoost e MLP no mesmo protocolo (`python -m opinion.modelo.comparar --midia <midia>`).
+PR-AUC entre desconhecidos; a escolha é feita na validação e o teste é medido uma vez.
+
+| Mídia | Treino | Escolhido na validação | PR-AUC validação | PR-AUC teste (IC 95%) | Regra no teste |
+|---|---:|---|---:|---:|---:|
+| Música | 5.879 | AdaBoost | 0,286 | 0,152 (0,077–0,295) | 0,102 |
+| Filmes | 32.829 | AdaBoost | 0,107 | 0,087 (0,052–0,149) | 0,070 |
+| Livros | 30.218 | AdaBoost | 0,114 | 0,109 (0,078–0,157) | 0,080 |
+| Séries | 6.356 | Regressão Logística | 0,102 | 0,064 (0,026–0,182) | 0,062 |
+| Jogos | 2.010 | Regressão Logística | 0,410 | 0,095 (0,054–0,195) | 0,223 |
+
+Nos recortes pequenos (séries, jogos e música) a validação tem poucas dezenas de conexões
+entre desconhecidos. A queda forte entre validação e teste em jogos (0,410 → 0,095, abaixo da
+regra) mostra que a escolha do modelo nesses recortes é instável: com 319 encontros de
+validação, a família escolhida depende do acaso da amostra. Para filmes e livros, com
+dezenas de milhares de encontros, o modelo supera a regra nos dois conjuntos. Por isso a API
+usa o modelo geral (todos os encontros, otimizado no CC5) para a chance de interação; os
+modelos por mídia ficam como análise complementar e no Checkpoint 2.
 
 ## Experimento histórico com os rótulos anteriores
 

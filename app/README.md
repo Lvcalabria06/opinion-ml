@@ -1,13 +1,22 @@
 # app/ — dashboard (CC9)
 
-Ainda não implementado. Entra no **CC9** (Sprint 8): dashboard interativo com encontros em tempo real,
-probabilidades, sinais por faixa e indicadores de imersão.
+Streamlit em `app/dashboard.py`. Lê tudo da API de inferência (`OPINION_API_URL`, padrão
+`http://localhost:8000`) e se atualiza sozinho (intervalo ajustável na barra lateral).
 
-O que a especificação pede que ele mostre:
+```bash
+streamlit run app/dashboard.py            # http://localhost:8501
+```
 
-- dados da infraestrutura de aquisição (MQTT e/ou API) e o funcionamento da solução em tempo de execução;
-- métricas do modelo e as previsões;
-- os indicadores da seção 3.2 do documento do projeto: taxa de conversão de encontros, precisão dos
-  sinais da pulseira e taxa de silenciamento (fadiga de notificação).
+| Aba | Conteúdo |
+|---|---|
+| Ao vivo | indicadores no topo; últimas inferências com a chance e o nível do sinal; distribuição dos sinais; avisos de afinidade por mídia; últimos encontros recebidos pela ingestão (MQTT) |
+| Indicadores | conversão por local e por dia, encontros e avisos por dia, fadiga de notificação, definições |
+| Modelo | modelo servido (MLflow), limiar, calibração e métricas de validação e teste |
+| Simular encontro | pontua um par na hora pela API e mostra a afinidade por mídia |
 
-Enquanto ele não existe, o Checkpoint 2 grava avisos por categoria e estimativas em `data/processed/avisos_categoria.csv`. A previsão do baseline geral opcional fica em `previsoes.csv`.
+Indicadores da seção 3.2 (calculados em `src/opinion/indicadores.py`):
+
+- **taxa de conversão de encontros:** encontros com a janela de 48 h encerrada que viraram interação no app;
+- **precisão dos sinais da pulseira:** entre os encontros com sinal, a fração que converteu (aviso de
+  afinidade e sinal do modelo, separados);
+- **taxa de silenciamento:** sinais seguidos de troca da pulseira para `pausado` em até 24 h.
