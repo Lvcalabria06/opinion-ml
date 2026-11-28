@@ -10,10 +10,10 @@
 
 | Nome | E-mail | GitHub |
 |---|---|---|
-| João Pedro | jpsa@cesar.school | _a preencher_ |
+| João Pedro | jpsa@cesar.school | [@jpp000](https://github.com/jpp000) |
 | Lucas Calabria | lvc@cesar.school | [@Lvcalabria06](https://github.com/Lvcalabria06) |
-| Maria Júlia Dantas | mjdma@cesar.school | _a preencher_ |
-| Maria Luíza Dantas | mldt@cesar.school | _a preencher_ |
+| Maria Júlia Dantas | mjdma@cesar.school | [@mariajuliadantas](https://github.com/mariajuliadantas) |
+| Maria Luíza Dantas | mldt@cesar.school | [@maludantass](https://github.com/maludantass) |
 
 **Equipe de Design**
 
