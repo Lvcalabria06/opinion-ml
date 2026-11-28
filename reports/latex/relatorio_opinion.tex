@@ -1,0 +1,282 @@
+\documentclass[12pt]{article}
+
+\usepackage{sbc-template}
+\usepackage{graphicx,url}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[brazil]{babel}
+\usepackage{booktabs}
+\usepackage{tikz}
+\usetikzlibrary{positioning,arrows.meta}
+
+\sloppy
+
+\title{OpiniON: previsão de amizade entre pessoas que se\\ encontram, a partir de uma pulseira de proximidade}
+
+\author{João Pedro\inst{1}, Lucas Calabria\inst{1}, Maria Júlia Dantas\inst{1},
+  Maria Luíza Dantas\inst{1},\\ Fábio André Oliveira Lins\inst{1},
+  Marcus Vinicius Menezes Barbosa\inst{1}, Pedro Mota\inst{1},\\ Rodrigo Quirino de Mello\inst{1}}
+
+\address{CESAR School -- Recife, PE -- Brasil
+  \email{\{jpsa,lvc,mjdma,mldt,faol,mvmb,pom2,rqm\}@cesar.school}
+}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+  OpiniON is a social platform built around taste. A wristband detects when two users are close to
+  each other, and the backend must decide whether to signal the encounter. We built the full machine
+  learning pipeline that answers ``two users have just met: how likely are they to be friends?'', using
+  real users, listening histories and friendships from the HetRec 2011 Last.fm dataset and simulated
+  encounters: a virtual wristband publishing over MQTT, ingestion into PostgreSQL, an Airflow pipeline,
+  seven model families, Bayesian optimization and grouped cross-validation tracked in MLflow, and an
+  inference service, API and dashboard deployed with Docker Compose. With a prevalence of 0.0075, the
+  calibrated logistic regression in production reaches a PR-AUC of 0.061 on the test pairs (0.061 $\pm$
+  0.008 in cross-validation), against 0.027 for a taste-similarity rule.
+\end{abstract}
+
+\begin{resumo}
+  O OpiniON é uma plataforma social construída em torno do gosto. Uma pulseira detecta quando dois
+  usuários estão próximos e o sistema precisa decidir se o encontro merece um sinal. Construímos o
+  pipeline completo de aprendizado de máquina que responde ``dois usuários acabaram de se encontrar:
+  qual a chance de eles serem amigos?'', com usuários, históricos de escuta e amizades reais do
+  HetRec 2011 Last.fm e encontros simulados: pulseira virtual publicando via MQTT, ingestão em
+  PostgreSQL, pipeline no Airflow, sete famílias de modelos, otimização bayesiana e validação cruzada
+  agrupada registradas no MLflow, além de serviço de inferência, API e dashboard implantados com Docker
+  Compose. Com prevalência de 0,0075, a regressão logística calibrada em produção alcança PR-AUC de
+  0,061 nos pares de teste (0,061 $\pm$ 0,008 na validação cruzada), contra 0,027 de uma regra de
+  afinidade de gosto.
+\end{resumo}
+
+\section{Introdução}
+
+Plataformas de recomendação costumam sugerir obras. O OpiniON propõe também aproximar pessoas, no
+momento em que elas estão fisicamente próximas: no cinema, na livraria, no campus ou numa convenção de
+jogos. A equipe de Design desenvolve uma pulseira que detecta a proximidade por Bluetooth e emite sinais
+discretos de luz. A equipe de Ciência da Computação ficou responsável por decidir \emph{quando}
+sinalizar.
+
+Um sinal em excesso cansa o usuário e leva ao silenciamento da pulseira; um sinal ausente desperdiça
+uma conexão. Por isso formulamos o problema como uma estimativa de probabilidade: dado um encontro que
+acabou de terminar, qual a chance de os dois usuários serem amigos? A amizade serve como sinal de que
+o par tem afinidade suficiente para uma conexão no app.
+
+Este relatório descreve a solução entregue nos requisitos CC1 a CC9: dados e infraestrutura de
+aquisição, pipeline, modelos, otimização, validação, integração, implantação e visualização. O código
+está em \url{https://github.com/Lvcalabria06/opinion-ml}.
+
+\section{Dados}
+
+Não há usuários reais do OpiniON nem pulseira física. Para que gosto e amizades não fossem inventados,
+usamos o HetRec 2011 Last.fm \cite{cantador2011hetrec}: 1.892 usuários, 17.632 artistas, 92.834 pares
+usuário--artista com contagem de escutas e 12.717 amizades bidirecionais. Cada artista vira uma obra
+de música; a nota de 1 a 5 é o quintil das escutas dentro de cada usuário; os gêneros vêm das tags mais
+usadas. A versão anterior do projeto usava a Amazon Reviews 2023 \cite{hou2024bridging}, que não tem
+amizades, e por isso o rótulo precisava ser simulado.
+
+Sobre esses usuários, um simulador gera 12 semanas de encontros (162.897), em quatro tipos de local. Os
+encontros são \textbf{independentes da amizade}: o simulador não sabe quem é amigo de quem. O rótulo
+\texttt{conectou} vale 1 quando o par é amigo no Last.fm, o que ocorre em 0,76\% dos encontros. Como as
+amizades não têm data, o rótulo é estático: as métricas medem o quanto o gosto musical e o contexto do
+encontro acompanham a amizade, não que o encontro a causou. Pode haver causalidade reversa (amigos
+influenciam o gosto um do outro).
+
+\section{Arquitetura da solução}
+
+A Figura~\ref{fig:arquitetura} resume o fluxo. A pulseira virtual publica quatro tipos de mensagem num
+broker MQTT (Mosquitto): \texttt{proximidade} no início do encontro, \texttt{encontro} no fim (com
+duração e RSSI médio), \texttt{interesse} e \texttt{status} (modo de descoberta). Os usuários aparecem
+como identificadores anônimos que mudam todo dia (HMAC do usuário e da data com um segredo do servidor),
+e só o backend consegue traduzi-los.
+
+\begin{figure}[!htbp]
+\centering
+\begin{tikzpicture}[
+  caixa/.style={draw, rounded corners, align=center, font=\footnotesize, minimum height=0.9cm,
+                minimum width=2.3cm, inner sep=3pt},
+  seta/.style={-{Stealth[length=2mm]}, thick},
+  rot/.style={font=\scriptsize, fill=white, inner sep=1pt}]
+  \node[caixa] (pul) at (0,0) {Pulseira virtual};
+  \node[caixa] (mqtt) at (3.4,0) {Broker MQTT};
+  \node[caixa] (ing) at (6.8,0) {Ingestão};
+  \node[caixa] (db) at (10.2,0) {PostgreSQL};
+  \node[caixa] (inf) at (3.4,-2.1) {Consumidor de\\inferência};
+  \node[caixa] (ml) at (6.8,-2.1) {MLflow};
+  \node[caixa] (af) at (10.2,-2.1) {Airflow\\(pipeline + treino)};
+  \node[caixa] (dash) at (3.4,-4.2) {Dashboard\\(Streamlit)};
+  \node[caixa] (api) at (6.8,-4.2) {API\\(FastAPI)};
+  \draw[seta] (pul) -- node[rot, above=2pt]{eventos} (mqtt);
+  \draw[seta] (mqtt) -- (ing);
+  \draw[seta] (ing) -- (db);
+  \draw[seta] (db) -- node[rot, right=2pt]{dados} (af);
+  \draw[seta] (af) -- node[rot, above=2pt]{registra} (ml);
+  \draw[seta] (ml) -- node[rot, above=2pt]{modelo} (inf);
+  \draw[seta] (mqtt) -- node[rot, right=2pt]{encontro} (inf);
+  \draw[seta] (inf.west) -| node[rot, pos=0.75, left=2pt]{feedback} (pul.south);
+  \draw[seta] (ml) -- node[rot, right=2pt]{modelo} (api);
+  \draw[seta] (db.east) -- ++(0.5,0) |- node[rot, pos=0.75, below=2pt]{inferências e indicadores} (api.east);
+  \draw[seta] (api) -- (dash);
+\end{tikzpicture}
+\caption{Arquitetura do OpiniON. Todos os serviços sobem com \texttt{docker compose up}.}
+\label{fig:arquitetura}
+\end{figure}
+
+O serviço de ingestão valida cada mensagem contra o contrato, traduz os identificadores, confere se a
+pulseira pertence ao usuário que publicou, deduplica as reentregas do QoS~1 e grava no banco. Na
+\texttt{proximidade}, ele calcula a afinidade de gosto do par e, se ela passa do corte, devolve à pulseira
+um aviso (``alguém por perto tem alta afinidade com você em música''). O modelo atua no fim do encontro,
+quando duração e intensidade do sinal Bluetooth já são conhecidas.
+
+\section{Pipeline de dados e \emph{features}}
+
+A DAG \texttt{opinion\_pipeline} do Apache Airflow tem sete tarefas: extração do banco para uma área de
+\emph{staging}, cálculo da compatibilidade de gosto, das \emph{features} do encontro e do rótulo (em
+paralelo), preparação do conjunto de modelagem, resumo e treino do modelo de produção. As mesmas funções
+são chamadas pela DAG, pelos experimentos e pelo serviço de inferência.
+
+São 42 \emph{features}: encontro (duração, RSSI, encontros anteriores do par), contexto (local, período,
+dia da semana, modo discreto), compatibilidade (similaridade de gêneros, concordância de notas,
+artistas em comum, favoritos em comum) e perfil (atividade e histórico de cada um). Toda \emph{feature}
+usa apenas dados anteriores ao início do encontro, o que um teste automatizado verifica. As
+\emph{features} de rede social (se já se seguem, número de conexões) ficam fora do modelo: com o rótulo
+de amizade, elas seriam o próprio rótulo.
+
+Sem datas de amizade, a divisão é \textbf{por par de usuários}: 70\% dos pares no treino (114.033
+encontros), 15\% na validação (24.367) e 15\% no teste (24.497), estratificada pela presença de
+positivos. Todos os encontros de um par ficam no mesmo conjunto. Escolha de modelo, de hiperparâmetros
+e do limiar acontece na validação; o teste é medido uma única vez por modelo.
+
+\section{Modelagem}
+
+\subsection{Métrica e referência}
+
+Com prevalência de 0,75\% no teste, a acurácia e a ROC-AUC dizem pouco. A métrica de escolha é a área
+sob a curva precisão $\times$ revocação (PR-AUC) \cite{saito2015precision}. Todo resultado é comparado
+com a \emph{regra simples}, que ordena os encontros pela afinidade de gosto, e com o acaso (a
+prevalência). O limiar do sinal maximiza o $F_{0,5}$, que pesa a precisão o dobro da revocação, porque
+um sinal errado custa mais do que um sinal perdido.
+
+\subsection{Comparação de modelos (CC3 e CC4)}
+
+O \emph{baseline} do CC3 foi uma regressão logística. No CC4 comparamos sete famílias no mesmo
+protocolo, com grades pequenas e fixas \cite{pedregosa2011scikit}: regressão logística, árvore de
+decisão, \emph{Random Forest}, \emph{Gradient Boosting}, KNN, AdaBoost e MLP (Tabela~\ref{tab:cc4}).
+
+\begin{table}[!htbp]
+\centering
+\caption{PR-AUC em todos os encontros (CC4). Escolha na validação; teste medido uma vez.}
+\label{tab:cc4}
+\footnotesize
+\begin{tabular}{lccc}
+\toprule
+Modelo & Validação & Teste (IC 95\%) & ROC-AUC (teste) \\
+\midrule
+Random Forest (escolhida) & 0,061 & 0,055 (0,041--0,074) & 0,833 \\
+Regressão logística & 0,061 & 0,063 (0,046--0,092) & 0,837 \\
+Árvore de decisão & 0,057 & 0,039 (0,028--0,056) & 0,741 \\
+AdaBoost & 0,051 & 0,055 (0,041--0,076) & 0,834 \\
+KNN & 0,051 & 0,056 (0,041--0,078) & 0,780 \\
+Gradient Boosting & 0,050 & 0,053 (0,039--0,078) & 0,827 \\
+MLP & 0,043 & 0,060 (0,040--0,090) & 0,816 \\
+Regra simples & 0,027 & 0,027 (0,020--0,040) & 0,724 \\
+Acaso & -- & 0,008 & 0,500 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+A \emph{Random Forest} foi escolhida na validação, empatada com a regressão logística, e no teste a
+ordem muda. Os intervalos dos sete modelos se sobrepõem: a diferença da \emph{Random Forest} para a
+regressão logística no teste é de $-0{,}008$ (IC 95\% de $-0{,}026$ a $0{,}000$). Contra a regra
+simples, a vantagem é consistente ($+0{,}027$, IC 95\% de $+0{,}014$ a $+0{,}044$). As \emph{features}
+mais importantes em todos os modelos são os favoritos e os artistas em comum.
+
+\subsection{Otimização de hiperparâmetros (CC5)}
+
+Otimizamos a regressão logística (50 tentativas) e a \emph{Random Forest} (30) com otimização
+bayesiana pelo Optuna (amostrador TPE) \cite{akiba2019optuna}, com objetivo na validação e cada tentativa
+registrada no MLflow \cite{zaharia2018accelerating}. Os melhores pontos ficaram na borda de maior
+regularização (regressão logística com $C \approx 2 \times 10^{-5}$; floresta com profundidade 3). Na
+validação, a PR-AUC subiu para 0,065 e 0,070, mas o ganho não se transferiu ao teste (0,061 e 0,053;
+Figura~\ref{fig:cc5}): com poucos positivos, a busca se ajusta ao ruído da validação.
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=.7\textwidth]{figuras/grade_x_optuna.png}
+\caption{Grade do CC4 $\times$ Optuna, na validação e no teste.}
+\label{fig:cc5}
+\end{figure}
+
+\subsection{Validação cruzada (CC6)}
+
+Avaliamos os dois modelos otimizados com validação cruzada estratificada e agrupada por par
+(\texttt{StratifiedGroupKFold}, 5 folds $\times$ 3 sementes) só sobre treino e validação. A regressão
+logística teve PR-AUC de $0{,}061 \pm 0{,}008$ e a \emph{Random Forest} $0{,}058 \pm 0{,}007$
+(Figura~\ref{fig:cc6}); a diferença pareada é menor que o desvio entre folds. A regra fica em
+$0{,}027 \pm 0{,}003$. A floresta sobreajusta mais: sua PR-AUC no treino supera a da validação em
+0,018, contra $-0{,}002$ da regressão logística. As curvas de aprendizado chegam a um platô a partir de
+um quarto do treino: mais encontros do mesmo tipo trariam pouco ganho. O teste do CC5 cai dentro de um
+desvio da validação cruzada para os dois modelos.
+
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=.75\textwidth]{figuras/estabilidade.png}
+\caption{PR-AUC por fold e semente na validação cruzada agrupada por par.}
+\label{fig:cc6}
+\end{figure}
+
+Com desempenho igual, escolhemos para produção a \textbf{regressão logística}: é mais simples,
+explicável e não sobreajusta.
+
+\section{Integração, implantação e visualização}
+
+\textbf{Inferência (CC7).} O modelo de produção é a regressão logística do CC5, com as probabilidades
+calibradas por uma sigmoide ajustada na validação \cite{platt1999probabilistic}; a calibração não muda a
+ordenação e permite exibir a saída como chance. No teste, ele tem PR-AUC de 0,061 e Brier de 0,0073; no
+limiar escolhido, 11,0\% dos sinais vão para pares amigos, contra 4,8\% da regra, sinalizando cerca de
+1,2\% dos encontros. Um consumidor assina os tópicos \texttt{encontro}, traduz os identificadores,
+calcula as \emph{features} com as funções do pipeline e estima a chance de amizade. O resultado é
+gravado no banco e, acima do limiar, o sinal volta à pulseira pelo tópico \texttt{feedback}, em duas
+faixas (leve a partir do limiar, perceptível a partir de 1,5 vez o limiar). Pulseiras pausadas não
+recebem sinal. Cada encontro é pontuado em cerca de meio segundo. Uma API (FastAPI) expõe a mesma
+inferência e fornece os dados do dashboard. A última tarefa da DAG reajusta o modelo com os dados novos
+e só promove a nova versão se ela superar a regra simples na validação.
+
+\textbf{Implantação (CC8).} Um único \texttt{docker compose up} sobe broker, banco, carga do histórico,
+ingestão, pulseira (reprodução das 12 semanas e depois encontros ao vivo), servidor MLflow, Airflow,
+consumidor de inferência, API, dashboard e um visualizador do banco. Validamos o fluxo de ponta a ponta
+com os mesmos serviços configurados como no \emph{compose}: os 162.897 encontros chegaram ao PostgreSQL
+sem perdas, a DAG executou as sete tarefas e registrou o modelo no MLflow, encontros gerados ao vivo
+foram pontuados automaticamente e um par de amigos recebeu o sinal perceptível na pulseira. O teste
+revelou que a ingestão termina alguns minutos depois da pulseira; o \emph{compose} agora espera a
+ingestão gravar tudo antes de iniciar o pipeline.
+
+\textbf{Dashboard (CC9).} Em Streamlit, mostra os encontros e as inferências em tempo real, os sinais
+emitidos, as métricas do modelo servido e os indicadores de produto: taxa de conversão (encontros entre
+pares amigos, 0,8\%), precisão dos sinais (aviso de afinidade e sinal do modelo, medidos pelo mesmo
+rótulo) e taxa de silenciamento, isto é, sinais seguidos de pausa da pulseira em até 24 horas.
+
+\section{Limitações}
+
+O rótulo é uma amizade estática, sem data: não há split temporal e o modelo não prevê amizades criadas
+pelo encontro. Os encontros são simulados e independentes da amizade, então duração, local e
+intensidade do sinal não carregam informação real sobre o rótulo. São apenas 1.892 usuários, e a
+licença do HetRec 2011 é não comercial. A validação foi usada para escolher hiperparâmetros, calibração
+e limiar, o que a deixa otimista; o teste e a validação cruzada mostram essa diferença. Por fim, a
+execução do \texttt{docker compose} com a construção das imagens precisa ser repetida num ambiente com
+acesso ao Docker Hub.
+
+\section{Conclusão}
+
+Entregamos uma solução completa e reproduzível, da pulseira ao dashboard, em que o modelo é treinado,
+otimizado, validado e servido com as mesmas funções de \emph{features}. Modelos mais complexos não
+superaram a regressão logística, e todos superam de forma consistente a regra de afinidade de gosto:
+o sinal do modelo acerta mais que o dobro de vezes. O próximo passo é substituir os encontros simulados
+pelos dados dos testes do protótipo do Design com pessoas reais, refazer a comparação e definir com o
+Design o custo de um sinal errado, que determina o limiar.
+
+\bibliographystyle{sbc}
+\bibliography{referencias}
+
+\end{document}

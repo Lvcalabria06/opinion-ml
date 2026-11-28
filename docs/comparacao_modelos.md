@@ -1,6 +1,6 @@
 # Comparação de modelos — OpiniOn (CC4)
 
-Gerado por `python -m opinion.modelo.comparar` em 22/11/2026 17:29. Números do teste medidos **uma vez** por modelo; nada foi escolhido com eles.
+Gerado por `python -m opinion.modelo.comparar` em 27/11/2026 23:51. Números do teste medidos **uma vez** por modelo; nada foi escolhido com eles.
 
 > Usuários, obras, notas e o rótulo `conectou` (amizade no Last.fm) são reais (HetRec 2011 Last.fm, [`fontes_dados.md`](fontes_dados.md)); só os encontros são simulados, **independentes da amizade**. O rótulo é estático (as amizades não têm data): as métricas mostram quanto o gosto musical acompanha a amizade, não que o encontro a causou, e amigos se influenciam (o gosto pode ser efeito da amizade).
 
@@ -9,7 +9,7 @@ Gerado por `python -m opinion.modelo.comparar` em 22/11/2026 17:29. Números do 
 - **Mesmos dados e split do CC3:** divisão por par (cada par inteiro em treino, validação ou teste), treino com 114.033 encontros.
 - **Cada família** tem uma grade pequena e fixa (`config/modelo.yaml → comparacao`). A configuração e o limiar do sinal (F0,5 em todos os encontros) são escolhidos na validação. Otimização de hiperparâmetros fica para o CC5 (Optuna) e validação cruzada para o CC6.
 - **Escolha do melhor modelo:** pr_auc na validação. A regra simples (`compat_score`) recebe o mesmo protocolo, com limiar próprio.
-- **Incerteza:** intervalo de confiança de 95% por bootstrap pareado (5 pontuações, mesmas reamostras para todas) no teste, em todos os encontros.
+- **Incerteza:** intervalo de confiança de 95% por bootstrap pareado (8 pontuações, mesmas reamostras para todas) no teste, em todos os encontros.
 
 ## 2. Resultado
 
@@ -18,7 +18,10 @@ Gerado por `python -m opinion.modelo.comparar` em 22/11/2026 17:29. Números do 
 | Random Forest **(escolhido)** | 0,061 | 0,055 (0,041–0,074) | 0,833 | 0,007 |
 | Regressão logística | 0,061 | 0,063 (0,046–0,092) | 0,837 | 0,007 |
 | Árvore de decisão | 0,057 | 0,039 (0,028–0,056) | 0,741 | 0,007 |
+| AdaBoost | 0,051 | 0,055 (0,041–0,076) | 0,834 | 0,033 |
+| KNN | 0,051 | 0,056 (0,041–0,078) | 0,780 | 0,007 |
 | Gradient Boosting | 0,050 | 0,053 (0,039–0,078) | 0,827 | 0,007 |
+| MLP (rede neural) | 0,043 | 0,060 (0,040–0,090) | 0,816 | 0,007 |
 | Regra simples | 0,027 | 0,027 (0,020–0,040) | 0,724 | não se aplica |
 | *acaso* | | *0,008* | *0,500* | *0,007* (constante) |
 
@@ -37,7 +40,10 @@ O limiar do modelo é uma avaliação acadêmica. O aviso do protótipo usa o co
 | Random Forest | 0,076 | 9,5% | 14,1% | 0,102 | 1,1% | 26 | 248 | 158 | 24.065 |
 | Regressão logística | 0,134 | 14,8% | 7,1% | 0,121 | 0,4% | 13 | 75 | 171 | 24.238 |
 | Árvore de decisão | 0,185 | 9,9% | 5,4% | 0,085 | 0,4% | 10 | 91 | 174 | 24.222 |
+| AdaBoost | 0,324 | 9,9% | 16,8% | 0,108 | 1,3% | 31 | 282 | 153 | 24.031 |
+| KNN | 0,090 | 10,5% | 9,8% | 0,104 | 0,7% | 18 | 153 | 166 | 24.160 |
 | Gradient Boosting | 0,070 | 9,3% | 15,2% | 0,101 | 1,2% | 28 | 273 | 156 | 24.040 |
+| MLP (rede neural) | 0,075 | 8,6% | 14,1% | 0,093 | 1,2% | 26 | 276 | 158 | 24.037 |
 | Regra simples | 0,866 | 4,8% | 7,6% | 0,051 | 1,2% | 14 | 280 | 170 | 24.033 |
 
 ![Matrizes de confusão](img/cc4/matrizes_confusao.png)
@@ -49,16 +55,19 @@ O limiar do modelo é uma avaliação acadêmica. O aviso do protótipo usa o co
 | Random Forest | -0,008 (-0,026 a +0,000) | +0,027 (+0,014 a +0,044) |
 | Regressão logística | — | +0,036 (+0,018 a +0,063) |
 | Árvore de decisão | -0,025 (-0,049 a -0,008) | +0,011 (-0,003 a +0,028) |
+| AdaBoost | -0,008 (-0,024 a +0,001) | +0,028 (+0,014 a +0,046) |
+| KNN | -0,008 (-0,025 a +0,004) | +0,028 (+0,012 a +0,048) |
 | Gradient Boosting | -0,010 (-0,027 a +0,004) | +0,026 (+0,011 a +0,048) |
+| MLP (rede neural) | -0,003 (-0,025 a +0,019) | +0,033 (+0,011 a +0,064) |
 
 ## 5. Precisão do sinal por contexto (todos os encontros, teste)
 
-| Local | Encontros | Taxa real | Random Forest | Regressão logística | Árvore de decisão | Gradient Boosting | Regra simples |
-|---|---|---|---|---|---|---|---|
-| campus | 9.624 | 0,7% | 9,3% (1,0%) | 25,0% (0,4%) | 13,9% (0,4%) | 9,4% (1,2%) | 3,8% (1,1%) |
-| cinema | 4.688 | 0,9% | 16,3% (0,9%) | 6,7% (0,3%) | 15,8% (0,4%) | 11,4% (0,9%) | 6,5% (1,3%) |
-| convencao_games | 5.012 | 0,8% | 6,8% (1,5%) | 5,0% (0,4%) | 4,2% (0,5%) | 10,5% (1,5%) | 4,3% (1,4%) |
-| livraria | 5.173 | 0,8% | 8,2% (1,2%) | 11,8% (0,3%) | 4,5% (0,4%) | 6,2% (1,2%) | 5,2% (1,1%) |
+| Local | Encontros | Taxa real | Random Forest | Regressão logística | Árvore de decisão | AdaBoost | KNN | Gradient Boosting | MLP (rede neural) | Regra simples |
+|---|---|---|---|---|---|---|---|---|---|---|
+| campus | 9.624 | 0,7% | 9,3% (1,0%) | 25,0% (0,4%) | 13,9% (0,4%) | 9,4% (1,3%) | 13,6% (0,7%) | 9,4% (1,2%) | 9,4% (1,3%) | 3,8% (1,1%) |
+| cinema | 4.688 | 0,9% | 16,3% (0,9%) | 6,7% (0,3%) | 15,8% (0,4%) | 14,3% (1,3%) | 0,0% (0,2%) | 11,4% (0,9%) | 11,4% (0,7%) | 6,5% (1,3%) |
+| convencao_games | 5.012 | 0,8% | 6,8% (1,5%) | 5,0% (0,4%) | 4,2% (0,5%) | 7,2% (1,4%) | 9,6% (1,0%) | 10,5% (1,5%) | 5,0% (1,6%) | 4,3% (1,4%) |
+| livraria | 5.173 | 0,8% | 8,2% (1,2%) | 11,8% (0,3%) | 4,5% (0,4%) | 9,4% (1,0%) | 8,9% (0,9%) | 6,2% (1,2%) | 10,0% (1,2%) | 5,2% (1,1%) |
 
 Cada célula: precisão (fração de encontros com sinal).
 
@@ -71,7 +80,10 @@ Queda de PR-AUC em todos os encontros quando a feature é embaralhada. Top 5 de 
 | Random Forest | `n_obras_comuns` (+0,024) | `favoritas_comuns` (+0,013) | `sim_notas` (+0,004) | `match_musica` (+0,004) | `tem_obras_comuns` (+0,003) |
 | Regressão logística | `n_obras_comuns` (+0,035) | `favoritas_comuns` (+0,013) | `tem_obras_comuns` (+0,012) | `compat_score` (+0,002) | `compat_score_musica` (+0,002) |
 | Árvore de decisão | `n_obras_comuns` (+0,044) | `favoritas_comuns` (+0,029) | `sim_generos` (+0,025) | `rssi_medio` (+0,012) | `dia_semana` (+0,007) |
+| AdaBoost | `n_obras_comuns` (+0,036) | `favoritas_comuns` (+0,021) | `tem_obras_comuns` (+0,004) | `historico_min` (+0,002) | `compat_score` (+0,001) |
+| KNN | `favoritas_comuns` (+0,071) | `n_obras_comuns` (+0,067) | `periodo_manha` (+0,010) | `generos_top3_comum` (+0,004) | `tem_obras_comuns` (+0,004) |
 | Gradient Boosting | `n_obras_comuns` (+0,035) | `favoritas_comuns` (+0,013) | `sim_notas` (+0,004) | `hora` (+0,002) | `dia_semana` (+0,001) |
+| MLP (rede neural) | `n_obras_comuns` (+0,022) | `favoritas_comuns` (+0,019) | `local_convencao_games` (+0,004) | `dia_semana` (+0,004) | `fim_de_semana` (+0,003) |
 
 ![Importância](img/cc4/importancia.png)
 
@@ -79,10 +91,13 @@ Queda de PR-AUC em todos os encontros quando a feature é embaralhada. Top 5 de 
 
 | Modelo | Configurações testadas | Treino por configuração | Pontuação por encontro |
 |---|---|---|---|
-| Random Forest | 4 | 3,7 s | 0,005 ms |
+| Random Forest | 4 | 9,2 s | 0,010 ms |
 | Regressão logística | 6 | 0,3 s | 0,001 ms |
 | Árvore de decisão | 6 | 0,3 s | 0,001 ms |
-| Gradient Boosting | 4 | 0,6 s | 0,002 ms |
+| AdaBoost | 4 | 21,6 s | 0,011 ms |
+| KNN | 4 | 5,6 s | 0,235 ms |
+| Gradient Boosting | 4 | 0,8 s | 0,002 ms |
+| MLP (rede neural) | 4 | 3,9 s | 0,002 ms |
 
 ## 8. Análise crítica
 
@@ -90,9 +105,9 @@ Queda de PR-AUC em todos os encontros quando a feature é embaralhada. Top 5 de 
 - **Contra o baseline (Regressão logística):** -0,008 de PR-AUC (IC 95% -0,026 a +0,000). O intervalo inclui zero: **não dá para afirmar que o modelo mais complexo é melhor que o baseline** com estes dados.
 - **Contra a regra simples:** +0,027 de PR-AUC (IC 95% +0,014 a +0,044) — o modelo supera a regra de forma consistente.
 - **No ponto de operação**, Random Forest acerta 9,5% dos sinais (recall 14,1%, sinal em 1,1% dos encontros); a regra, 4,8% (recall 7,6%, sinal em 1,2%). A vantagem aparece também na precisão do sinal, que é o que o usuário sente.
-- **Calibração:** prever sempre a prevalência dá Brier 0,007. Árvore de decisão fica pior que isso; Regressão logística, Random Forest e Gradient Boosting ficam melhor. A ordenação e o limiar não dependem disso, mas a probabilidade só pode ser mostrada como chance real (dashboard, faixas de sinal) depois de calibrada.
+- **Calibração:** prever sempre a prevalência dá Brier 0,007. Árvore de decisão e AdaBoost ficam pior que isso; Regressão logística, Random Forest, Gradient Boosting, KNN e MLP (rede neural) ficam melhor. A ordenação e o limiar não dependem disso, mas a probabilidade só pode ser mostrada como chance real (dashboard, faixas de sinal) depois de calibrada.
 - **O que os modelos aprendem:** todos têm `favoritas_comuns`, `n_obras_comuns` entre as 3 features mais importantes. Lembrete: o rótulo é amizade real no Last.fm, mas estática (sem data), e os encontros são simulados; a importância mostra associação com a amizade, não causa.
-- **Custo:** Random Forest pontua um encontro em 0,005 ms, sem impedimento para o sinal em tempo real (CC7).
+- **Custo:** Random Forest pontua um encontro em 0,010 ms, sem impedimento para o sinal em tempo real (CC7).
 - **Recomendação para o CC5:** otimizar Random Forest com Optuna, mantendo o baseline como referência explicável.
 
 ## 9. Limitações

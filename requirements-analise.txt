@@ -1,9 +1,6 @@
-# para o notebook de EDA, a validação da simulação e os testes
+# para o notebook de EDA, a validação da simulação, o treino e os testes
 -r requirements.txt
-matplotlib>=3.8
-scikit-learn>=1.4
-mlflow>=3.5
-optuna>=4
+-r requirements-ml.txt
 jupyter
 pytest
 -e .                   # instala o pacote opinion (src/) em modo editável

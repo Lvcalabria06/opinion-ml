@@ -38,7 +38,8 @@ DOC = RAIZ / "docs" / "comparacao_modelos.md"
 FIGURAS = RAIZ / "docs" / "img" / "cc4"
 VERDADE = PASTA_BOOTSTRAP / "verdade_simulacao_NAO_USAR_COMO_FEATURE" / "encontros_ocultos.csv"
 NOMES = {"regressao_logistica": "Regressão logística", "arvore_decisao": "Árvore de decisão",
-         "random_forest": "Random Forest", "gradient_boosting": "Gradient Boosting", "regra": "Regra simples"}
+         "random_forest": "Random Forest", "gradient_boosting": "Gradient Boosting", "knn": "KNN",
+         "adaboost": "AdaBoost", "mlp": "MLP (rede neural)", "regra": "Regra simples"}
 
 
 def _nome(k: str) -> str:
@@ -142,7 +143,14 @@ def comparar(pasta=PASTA_PROCESSADOS, cfg=None, registrar=True, doc: Path | None
         t1 = time.time()
         p_te, met_te = medir_teste(melhor, te, cols, desc_te, beta)
         latencia_ms = 1000 * (time.time() - t1) / len(te)
-        imp = permutation_importance(melhor["modelo"], va[cols][desc_va], va.conectou[desc_va],
+        X_imp, y_imp = va[cols][desc_va], va.conectou[desc_va]
+        if melhor["tipo"] == "knn" and len(X_imp) > 6000:
+            # KNN prevê comparando com todo o treino: a permutação usa todos os positivos e uma
+            # amostra fixa dos negativos, senão leva horas
+            pos = y_imp[y_imp == 1].index
+            neg = y_imp[y_imp == 0].sample(6000 - len(pos), random_state=0).index
+            X_imp, y_imp = X_imp.loc[pos.union(neg)], y_imp.loc[pos.union(neg)]
+        imp = permutation_importance(melhor["modelo"], X_imp, y_imp,
                                      scoring="average_precision", n_repeats=c["importancia"]["repeticoes"],
                                      random_state=c["importancia"]["semente"], n_jobs=1)
         familias[fam] = {**melhor, "teste": met_te, "p_teste": p_te, "tempo_treino_s": tempo,

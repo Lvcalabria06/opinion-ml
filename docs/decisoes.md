@@ -5,6 +5,38 @@ fica em cima. Decisões ainda abertas ficam em [`status.md`](status.md).
 
 ---
 
+## D-018 · 28/11/2026 · Docker Compose com servidor MLflow, treino na DAG e espera da ingestão (CC8)
+
+- **Decisão:** o compose ganha um servidor MLflow com proxy de artefatos; Airflow, API e consumidor
+  falam com ele por HTTP (`MLFLOW_TRACKING_URI`). A DAG ganha a task `treino`. O serviço do replay só
+  termina depois que a ingestão grava todos os encontros (`opinion.aguardar_ingestao`).
+- **Motivo:** com SQLite + volume, o caminho dos artefatos gravado por um container não existe nos
+  outros. No teste de 28/11 a ingestão terminou ~3 min depois da pulseira (163 mil encontros): sem a
+  espera, o Airflow leria o banco pela metade.
+- **Consequência:** `scikit-learn` fixado na mesma versão nas duas imagens (a API carrega o pickle
+  treinado pelo Airflow).
+
+## D-017 · 28/11/2026 · Inferência após o encontro: chance de amizade, sinal pelo tópico feedback (CC7)
+
+- **Decisão:** o aviso de afinidade continua na proximidade (D-013). No **fim** do encontro, o consumidor
+  de inferência estima a chance de amizade com o modelo de produção e, acima do limiar, publica
+  `feedback` com `tipo: previsao_amizade`. Faixas: `periferico_leve` a partir do limiar,
+  `periferico_perceptivel` a partir de 1,5 × limiar. Pulseira pausada não recebe sinal.
+- **Modelo de produção:** a regressão logística do CC5 (`C≈2e-5`), recomendada no CC6 (D-015),
+  calibrada com sigmoide na validação para a probabilidade poder ser mostrada como chance. A DAG só
+  promove uma versão nova se ela superar a regra simples na validação.
+- **Consequência:** a "taxa de conversão" e a "precisão dos sinais" do dashboard usam o mesmo rótulo
+  (par amigo na rede). Como ele é estático, os indicadores medem acerto do sinal, não amizades criadas
+  pelo encontro.
+
+## D-016 · 28/11/2026 · CC4 com sete famílias (KNN, AdaBoost e MLP)
+
+- **Decisão:** a comparação do Last.fm inclui KNN, AdaBoost e MLP, para cumprir os três modelos da lista
+  da especificação (antes havia só Árvore e Random Forest da lista).
+- **Resultado:** Random Forest segue escolhida na validação (0,061); KNN 0,051, AdaBoost 0,051 e MLP 0,043
+  na validação. No teste os sete ficam entre 0,039 e 0,063, com intervalos sobrepostos; todos superam a
+  regra simples (0,027). O CC5 e o CC6 (D-015) não mudam.
+
 ## D-015 · 23/11/2026 · CC5 (Optuna) e CC6 (validação cruzada) no experimento Last.fm
 
 - **CC5:** Optuna (TPE, semente 42) otimiza regressão logística (50 tentativas) e Random Forest (30),

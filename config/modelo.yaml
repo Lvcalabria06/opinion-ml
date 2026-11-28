@@ -78,6 +78,24 @@ comparacao:
         learning_rate: [0.05, 0.1]
         max_leaf_nodes: [15, 31]
         min_samples_leaf: [50]
+    # Três famílias da lista da especificação do CC4 (KNN, Árvore, Random Forest, AdaBoost, MLP),
+    # além de Árvore e Random Forest. KNN e MLP padronizam as features dentro do pipeline.
+    knn:
+      tipo: knn
+      grade:
+        n_neighbors: [51, 151]
+        weights: [uniform, distance]
+    adaboost:
+      tipo: adaboost
+      grade:
+        n_estimators: [200]
+        learning_rate: [0.1, 0.5]
+        max_depth: [1, 2]               # profundidade da árvore-base (1 = stump)
+    mlp:
+      tipo: mlp
+      grade:
+        hidden_layer_sizes: [[32], [64, 32]]
+        alpha: [0.001, 0.01]
 
 # =====================================================================
 # CC5 — otimização de hiperparâmetros com Optuna (python -m opinion.modelo.otimizar)
@@ -129,3 +147,20 @@ validacao_cruzada:
   complexidade:
     regressao_logistica: {parametro: C, valores: [0.00002, 0.0001, 0.001, 0.01, 0.1, 1, 10, 100]}
     random_forest: {parametro: max_depth, valores: [2, 3, 4, 8, 12, 16, 24]}
+
+# =====================================================================
+# Produção (CC7/CC8): modelo servido pela API e pelo consumidor MQTT
+# ---------------------------------------------------------------------
+# Regressão logística com os hiperparâmetros do CC5 (docs/otimizacao.md), a família recomendada
+# no CC6 (empata com a Random Forest, é mais simples e não sobreajusta; docs/validacao_cruzada.md).
+# A task `treino` da DAG reajusta no treino, calibra as probabilidades na validação (sigmoide:
+# não muda a ordenação) e só promove a versão se superar a regra simples na validação.
+# =====================================================================
+producao:
+  modelo_registrado: opinion-producao-lastfm
+  alias: producao
+  familia: regressao_logistica
+  tipo: logreg
+  params: {C: 2.064e-05}                    # CC5 (Optuna), class_weight = None
+  calibracao: sigmoid                       # sigmoid | isotonic | nenhuma
+  faixa_perceptivel_fator: 1.5              # p >= limiar → periferico_leve; p >= 1,5 × limiar → periferico_perceptivel

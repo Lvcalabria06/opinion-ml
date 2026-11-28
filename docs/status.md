@@ -4,77 +4,63 @@
 > (feita, em revisão, bloqueada) ou quando uma decisão for tomada. Decisões com justificativa
 > vão também para [`decisoes.md`](decisoes.md).
 
-Última atualização: **22/11/2026**. Branch `experimento-lastfm` (experimento sobre a `main`).
-
-## Experimento Last.fm (branch `experimento-lastfm`)
-
-CC1 a CC4 refeitos com o HetRec 2011 Last.fm e a pergunta "dois usuários se encontraram; qual a chance
-de serem amigos?" ([D-014](decisoes.md), [fonte](fontes_dados.md)). Teste: 24.497 encontros, 184 encontros
-positivos (176 pares), prevalência 0,0075.
-
-| Modelo | PR-AUC | ROC-AUC |
-|---|---|---|
-| Regressão logística (baseline CC3) | 0,063 | 0,837 |
-| Regra simples (`compat_score`) | 0,027 | 0,724 |
-| Jaccard de artistas sozinho (medição pontual da equipe, mesmo split de teste) | 0,057 | 0,824 |
-| Random Forest (escolhido no CC4 pela validação) | 0,055 (IC 0,041–0,074) | 0,833 |
-
-No teste a regressão logística ficou em primeiro; Random Forest contra a regra: +0,027 (IC +0,014 a +0,044).
-Checkpoint 2 OK. MLflow: `opinion-cc3-lastfm`, `opinion-baseline-cc3-lastfm`, `opinion-cc4-lastfm`,
-`opinion-cc4-lastfm@melhor`. Validação da simulação: 13 OK (modo amizade; cenários de sensibilidade não
-se aplicam). Notebook reexecutado, 12 figuras.
-
-**CC5 e CC6 (23/11/2026, [D-015](decisoes.md)):** Optuna na LR e na RF ([`otimizacao.md`](otimizacao.md));
-CV estratificada agrupada por par, 5 × 3 ([`validacao_cruzada.md`](validacao_cruzada.md)). LR 0,061 ± 0,008 e
-RF 0,058 ± 0,007 empatam; a LR é a recomendada (mais simples, sem sobreajuste).
-
-Pendências do experimento: teste de MQTT e Docker de ponta a ponta (Docker desligado, não
-verificado); validação do professor para o novo problema. Limitações: sem datas de amizade (sem split
-temporal, possível causalidade reversa), encontros sem sinal real do label, ~1,9 mil usuários, licença não comercial.
-
-Os números abaixo, até a próxima seção de pendências, descrevem a `main` (Amazon).
+Última atualização: **28/11/2026**. Versão atual: experimento Last.fm (rótulo = amizade real, [D-014](decisoes.md)).
 
 ## Entregas e estado atual
 
 | Entrega | Estado | Referência |
 |---|---|---|
-| CC1, pulseira virtual, MQTT, ingestão e Checkpoint 1 | Implementado | [Contrato MQTT](contrato_mqtt.md) |
-| CC2, pipeline temporal e dados preparados | Implementado | [Dicionário de dados](dicionario_dados.md) |
-| CC3, baseline acadêmico e Checkpoint 2 | Implementado | `src/opinion/modelo/treinar.py`, `src/opinion/checkpoint2.py` |
-| CC4, quatro famílias de modelo | Implementado com recortes por mídia | [Resultados atuais](match_por_midia.md) |
-| Aviso por categoria na proximidade | Implementado na ingestão e pulseira virtual | [Decisão D-013](decisoes.md) |
-| API e dashboard | Pendentes | `api/README.md`, `app/README.md` |
+| CC1, pulseira virtual, MQTT, ingestão e Checkpoint 1 | Implementado; replay testado com PostgreSQL em 28/11 | [Contrato MQTT](contrato_mqtt.md) |
+| CC2, pipeline e dados preparados | Implementado; DAG testada no Airflow 3.1 em 28/11 | [Dicionário de dados](dicionario_dados.md) |
+| CC3, baseline e Checkpoint 2 | Implementado | `src/opinion/modelo/treinar.py`, `src/opinion/checkpoint2.py` |
+| CC4, comparação de 7 famílias (inclui KNN, AdaBoost e MLP) | Implementado | [Comparação](comparacao_modelos.md) |
+| CC5, Optuna na LR e na RF | Implementado | [Otimização](otimizacao.md) |
+| CC6, validação cruzada agrupada por par | Implementado | [Validação cruzada](validacao_cruzada.md) |
+| CC7, consumidor MQTT, sinal de volta à pulseira, API, retreino na DAG | Implementado e testado de ponta a ponta | `src/opinion/inferencia*.py`, `api/` |
+| CC8, Docker Compose completo | Escrito e validado com `docker compose config`; fluxo testado fora do Docker | `docker-compose.yml` |
+| CC9, dashboard | Implementado | `app/` |
+| Relatório SBC | Gerado | [`reports/relatorio_opinion.pdf`](../reports/relatorio_opinion.pdf) |
+| README e Google Sites | Nome, membros e link preenchidos; faltam usuários do GitHub de 2 membros | [README](../README.md) · [conteúdo do site](google_sites.md) |
 
-O bootstrap atual contém 1.200 usuários da Amazon, 48.018 obras, 58.251 avaliações e 69.384 encontros simulados. Após a purga, o dataset contém 68.315 encontros, com 46.244 no treino, 10.101 na validação e 11.970 no teste. A taxa de `conectou` é 8,16% no dataset preparado. Os cinco modelos por mídia foram treinados no MLflow local.
+## Resultados principais (PR-AUC em todos os encontros, teste)
 
-O backend emite aviso quando pelo menos uma mídia tem afinidade alta. O corte inicial é 0,68. Em 6.972 encontros houve categoria sinalizada, 209 em mais de uma. O label de 48 h é único por encontro e inclui interações de fundo. A demonstração do Checkpoint 2 informa o aviso por categoria e estima a chance de interação com os modelos registrados. O baseline geral segue disponível com `--baseline`.
+Teste: 24.497 encontros, 184 entre pares amigos (prevalência 0,0075).
 
-O notebook de EDA e [a comparação geral](comparacao_modelos.md) foram gerados em rodadas anteriores. Seus gráficos e números estão identificados como históricos. A [validação atual da simulação](validacao_simulacao.md) encontrou 15 checagens OK, uma atenção e uma falha: a taxa de interação entre desconhecidos foi de 1,2%, abaixo da faixa de 2%–15% definida para a checagem.
+| Modelo | Validação | Teste | Validação cruzada |
+|---|---|---|---|
+| Regressão logística do CC5, calibrada (**produção**) | 0,065 | 0,061 | 0,061 ± 0,008 |
+| Random Forest (escolhida no CC4 e no CC5 pela validação) | 0,070 | 0,053 | 0,058 ± 0,007 |
+| Regra simples (`compat_score`) | 0,027 | 0,027 | 0,027 ± 0,003 |
+| Acaso (prevalência) | — | 0,008 | 0,008 |
+
+No ponto de operação (teste), o modelo de produção acerta 11,0% dos sinais, contra 4,8% da regra, sinalizando ~1,2% dos encontros.
 
 ## O que ainda falta
+
+### Para a equipe
+
+- **Rodar `docker compose up --build` uma vez** numa máquina com Docker e registrar o resultado aqui.
+  O mesmo fluxo foi testado em 28/11 com os serviços instalados localmente.
+- **Usuários do GitHub** de João Pedro e Maria Júlia Dantas no topo do README.
+- **Conferir o template do relatório** com o anexo da especificação ([`reports/README.md`](../reports/README.md)).
+- **Google Sites:** publicar o conteúdo de [`google_sites.md`](google_sites.md).
+- **Validação do professor** para a troca do problema (interação em 48 h → amizade).
 
 ### Para fechar com o Design
 
 | Decisão | Proposta da equipe de ML | Impacto |
 |---|---|---|
-| A pulseira deve sinalizar quem eu já sigo? | política atual usa apenas afinidade e modo | decisão de produto |
-| Duração mínima antes do sinal | aviso no início é a hipótese atual | política de sinal |
-| Personas definitivas | substituir as provisórias de `config/simulacao.yaml` | simulador |
-| Custo de um sinal errado | — | define a métrica final e o limiar do modelo |
-| Padrões físicos do tópico `feedback` | `luz_suave` no protótipo | Design |
+| A pulseira deve sinalizar quem já é amigo? | hoje sinaliza pela chance, sem olhar a amizade | decisão de produto |
+| Duração mínima antes do sinal | aviso de afinidade no início; sinal do modelo no fim | política de sinal |
+| Custo de um sinal errado | F0,5 (precisão vale o dobro) | define o limiar |
+| Padrões físicos do tópico `feedback` | `luz_suave` (leve) e `luz_pulsante` (perceptível) | Design |
 
-### Pendências de infraestrutura
+### Limitações conhecidas
 
-- **`docker compose up --build` nunca foi testado** (o ambiente original não tinha Docker). Alguém
-  com Docker precisa rodar uma vez antes da apresentação e registrar o resultado aqui.
+Sem datas de amizade não há split temporal e pode haver causalidade reversa; os encontros são simulados
+e independentes da amizade; ~1,9 mil usuários; licença não comercial do HetRec 2011.
 
----
+### Próximo passo de dados
 
-## Próximos requisitos (para planejamento)
-
-| Requisito | O que se sabe hoje |
-|---|---|
-| CC5 | Otimização por mídia, com validação temporal e comparação com a regra da categoria |
-| CC6 | k-fold **agrupado por par** (`par_id`), estabilidade, overfitting/underfitting |
-| CC7 | API de inferência e integração do modelo; a ingestão já envia `feedback` por categoria |
-| Semana 16 | testes do protótipo do Design com usuários reais; comparar com a simulação (seção 4 da validação) |
+Semana 16: testes do protótipo do Design com pessoas reais. Os encontros reais entram pelo mesmo MQTT e
+pelo mesmo pipeline; refazer CC4–CC6 com eles.
