@@ -63,7 +63,11 @@ O curso pede entregas de Ciência da Computação (CC) a cada sprint.
 | 2 | CC2 | pipeline no Airflow, EDA, validação da simulação, sessão com o Design |
 | 3 (S12) | CC3 | baseline explicável (Regressão Logística ou Árvore de Decisão) no **MLflow**, split temporal, comparação com a regra simples, **Checkpoint 2** |
 | 4 | CC4 | comparação de quatro famílias em recortes por mídia |
-| depois | CC5, CC6, CC7 | otimização, estabilidade, API de inferência; o aviso MQTT por categoria já funciona na ingestão |
+| 5 | CC5 | otimização de hiperparâmetros (Optuna) e calibração |
+| 6 | CC6 | validação cruzada agrupada por par, estabilidade, overfitting e janela temporal |
+| 7 | CC7 | modelo integrado: consumidor MQTT, sinal de volta à pulseira, API de inferência, retreino na DAG |
+| 8 | CC8 | Docker Compose com a solução completa (MLflow, API, dashboard) |
+| 9 | CC9 | dashboard com tempo real, métricas e indicadores |
 
 Semana 16: testes do protótipo do Design com pessoas reais; os encontros reais entram pelo mesmo MQTT
 e pelo mesmo pipeline.

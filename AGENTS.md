@@ -33,6 +33,8 @@ métricas melhorem.
 - **Exceção na branch `experimento-lastfm`:** o rótulo é amizade real (estática) e o split é por par de
   usuários, sem recorte "desconhecidos" (ver D-014). Não "corrija" de volta para split temporal nem
   recorte `algum_segue == 0`.
+- **Mesmas features no treino e na inferência:** a API e o consumidor MQTT usam `opinion.modelo.pontuar.matriz`
+  (funções do pipeline); nunca reimplemente uma feature só para a inferência.
 - **Dados externos têm fonte:** todo dataset público usado é citado (origem, licença, filtro aplicado).
 
 ## Convenções
@@ -52,6 +54,7 @@ pip install -r requirements-analise.txt && cp .env.example .env    # uma vez
 python -m pytest tests -q                                           # fontes, pipeline, baseline
 python -m opinion.pipeline.executar --fonte arquivos                # se data/processed/ estiver vazio
 python -m opinion.modelo.comparar --midia musica                   # CC4 por mídia → MLflow
+python -m opinion.modelo.producao --sem-registro                   # modelo servido pela API, sem gravar
 python -m opinion.checkpoint2 --usuarios usr-00694 usr-01029     # aviso musical e estimativa
 ```
 
@@ -76,3 +79,4 @@ O roteiro completo (MQTT, Checkpoint 1, Airflow, Docker) e as saídas esperadas 
 | [`docs/contrato_mqtt.md`](docs/contrato_mqtt.md) | mexer na pulseira virtual, na ingestão ou falar com o Design |
 | [`docs/fontes_dados.md`](docs/fontes_dados.md) | mexer em usuários, obras, avaliações ou baixar dados externos |
 | [`docs/validacao_simulacao.md`](docs/validacao_simulacao.md) | mudar premissas do simulador ou interpretar resultados |
+| [`api/README.md`](api/README.md) · [`app/README.md`](app/README.md) | mexer na API, no consumidor de inferência ou no dashboard |
